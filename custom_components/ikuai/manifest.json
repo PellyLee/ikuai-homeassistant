@@ -1,7 +1,7 @@
 {
   "domain": "ikuai",
   "name": "iKuai Router",
-  "codeowners": ["@workbuddy"],
+  "codeowners": ["@PellyLee"],
   "config_flow": true,
   "documentation": "https://rapi-docs.ikuai8.com/",
   "integration_type": "hub",

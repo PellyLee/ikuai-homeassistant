@@ -17,17 +17,31 @@ from .api import (
     IkuaiApiConnectionError,
 )
 from .const import (
+    CONF_EDITION,
+    CONF_ENABLE_WRITE,
+    CONF_RESOURCE_GROUPS,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
     CONF_VERIFY_SSL,
     DEFAULT_CLIENT_LIMIT,
+    DEFAULT_EDITION,
+    DEFAULT_ENABLE_WRITE,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
+    EDITION_FREE,
     EXTENDED_SCAN_INTERVAL,
     PLATFORMS,
+    RESOURCE_SCAN_INTERVAL,
+    WRITE_PLATFORMS,
 )
-from .coordinator import IkuaiDataUpdateCoordinator, IkuaiExtendedCoordinator
+from .coordinator import (
+    IkuaiDataUpdateCoordinator,
+    IkuaiExtendedCoordinator,
+    IkuaiResourceCoordinator,
+)
+from .helpers import detect_edition
+from .resources import filter_by_edition, resolve
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +52,9 @@ class IkuaiRuntimeData:
 
     main: IkuaiDataUpdateCoordinator
     extended: IkuaiExtendedCoordinator
+    resources: IkuaiResourceCoordinator | None = None
+    edition: str = EDITION_FREE
+    """Resolved edition (free/enterprise), override applied over auto-detect."""
 
 
 def merged_config(entry: ConfigEntry) -> dict:
@@ -73,16 +90,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Extended data is optional: failing calls must not block setup.
     await extended.async_config_entry_first_refresh()
 
-    hass.data[DOMAIN][entry.entry_id] = IkuaiRuntimeData(main=main, extended=extended)
+    runtime = IkuaiRuntimeData(main=main, extended=extended)
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Edition: auto-detect from the firmware, but let the user override when
+    # detection disagrees. Used to hide enterprise-only resource groups.
+    override = config.get(CONF_EDITION, DEFAULT_EDITION)
+    runtime.edition = (
+        override
+        if override in (EDITION_FREE, EDITION_ENTERPRISE)
+        else main.data.edition
+    )
+
+    # Phase 2: write support is opt-in and requires both enable_write and at
+    # least one selected resource group. Without it no extra request is made.
+    platforms = list(PLATFORMS)
+    if config.get(CONF_ENABLE_WRITE, DEFAULT_ENABLE_WRITE):
+        chosen = resolve(config.get(CONF_RESOURCE_GROUPS) or [])
+        resources = filter_by_edition(chosen, runtime.edition)
+        skipped = {r.key for r in chosen} - {r.key for r in resources}
+        if skipped:
+            _LOGGER.info(
+                "Edition %s: skipping enterprise-only group(s): %s",
+                runtime.edition,
+                ", ".join(sorted(skipped)),
+            )
+        runtime.resources = IkuaiResourceCoordinator(
+            hass, client, resources, RESOURCE_SCAN_INTERVAL
+        )
+        await runtime.resources.async_config_entry_first_refresh()
+        platforms.extend(WRITE_PLATFORMS)
+        if resources:
+            _LOGGER.debug(
+                "Write support enabled for %d resource group(s): %s",
+                len(resources),
+                ", ".join(res.key for res in resources),
+            )
+
+    hass.data[DOMAIN][entry.entry_id] = runtime
+
+    await hass.config_entries.async_forward_entry_setups(entry, platforms)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    platforms = list(PLATFORMS)
+    if merged_config(entry).get(CONF_ENABLE_WRITE, DEFAULT_ENABLE_WRITE):
+        platforms.extend(WRITE_PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok

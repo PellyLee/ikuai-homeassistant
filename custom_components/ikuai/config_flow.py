@@ -14,6 +14,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME
 from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -24,15 +25,24 @@ from .api import (
     IkuaiApiError,
 )
 from .const import (
+    CONF_EDITION,
+    CONF_ENABLE_WRITE,
+    CONF_RESOURCE_GROUPS,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
     CONF_VERIFY_SSL,
+    DEFAULT_EDITION,
+    DEFAULT_ENABLE_WRITE,
     DEFAULT_NAME,
+    DEFAULT_RESOURCE_GROUPS,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
+    EDITION_ENTERPRISE,
+    EDITION_FREE,
 )
-from .helpers import normalize_host
+from .helpers import detect_edition, edition_label, normalize_host
+from .resources import RESOURCES
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -147,7 +157,12 @@ class IkuaiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class IkuaiOptionsFlow(config_entries.OptionsFlow):
-    """Options: change router IP, token, polling interval and TLS validation."""
+    """Options: router IP, token, polling interval, TLS and (opt-in) write support.
+
+    Write support needs two independent confirmations on purpose:
+    * `enable_write` - the master switch, off by default
+    * `resource_groups` - which rule groups may be exposed as switches
+    """
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
@@ -163,6 +178,50 @@ class IkuaiOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        known_keys = {res.key for res in RESOURCES}
+        selected = [
+            key
+            for key in (self._current(CONF_RESOURCE_GROUPS, DEFAULT_RESOURCE_GROUPS) or [])
+            if key in known_keys
+        ]
+
+        # Detect the edition live so the picker can explain which groups are
+        # unavailable. A failed detection (offline box) just hides the hint.
+        detected = None
+        try:
+            session = async_get_clientsession(
+                self.hass,
+                verify_ssl=self._current(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            )
+            client = IkuaiApiClient(
+                session,
+                self._current(CONF_HOST, ""),
+                self._current(CONF_TOKEN, ""),
+                verify_ssl=self._current(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            )
+            system = await client.async_get_system()
+            verinfo = (system.get("sysinfo") or {}).get("verinfo") or {}
+            detected = detect_edition(verinfo)
+        except IkuaiApiError:
+            detected = None
+
+        edition_options = {
+            DEFAULT_EDITION: (
+                f"自动检测（当前：{edition_label(detected)}）"
+                if detected
+                else "自动检测"
+            ),
+            EDITION_FREE: "免费版",
+            EDITION_ENTERPRISE: "企业版",
+        }
+
+        group_labels = {}
+        for res in RESOURCES:
+            label = f"{res.name}（/{res.path}）"
+            if res.enterprise_only:
+                label += "（仅企业版）"
+            group_labels[res.key] = label
+
         schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=self._current(CONF_HOST, "")): str,
@@ -175,6 +234,17 @@ class IkuaiOptionsFlow(config_entries.OptionsFlow):
                     CONF_SCAN_INTERVAL,
                     default=self._current(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
+                vol.Required(
+                    CONF_EDITION,
+                    default=self._current(CONF_EDITION, DEFAULT_EDITION),
+                ): vol.In(edition_options),
+                vol.Required(
+                    CONF_ENABLE_WRITE,
+                    default=self._current(CONF_ENABLE_WRITE, DEFAULT_ENABLE_WRITE),
+                ): bool,
+                vol.Optional(
+                    CONF_RESOURCE_GROUPS, default=selected
+                ): cv.multi_select(group_labels),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

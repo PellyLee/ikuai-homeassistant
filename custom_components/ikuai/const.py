@@ -12,6 +12,25 @@ CONF_TOKEN = "token"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_VERIFY_SSL = "verify_ssl"
 
+# Phase 2: write support is opt-in. Both switches below must be turned on
+# before a single write request is issued:
+#   enable_write    - master switch (off by default)
+#   resource_groups - the CRUD groups the user wants exposed (empty by default)
+CONF_ENABLE_WRITE = "enable_write"
+CONF_RESOURCE_GROUPS = "resource_groups"
+DEFAULT_ENABLE_WRITE = False
+DEFAULT_RESOURCE_GROUPS: list[str] = []
+
+# Edition: iKuai ships a "免费版" (free, software installed on x86) and an
+# "企业版" (enterprise, hardware appliance such as IK-M200). The two expose
+# different endpoints, so we auto-detect the edition from `verinfo` and use it
+# to hide enterprise-only resource groups on free firmware. The user can
+# override the guess with CONF_EDITION when detection is wrong.
+EDITION_FREE = "free"
+EDITION_ENTERPRISE = "enterprise"
+CONF_EDITION = "edition"
+DEFAULT_EDITION = "auto"  # auto | free | enterprise
+
 # Slower polling for data that changes rarely or costs more to fetch.
 EXTENDED_SCAN_INTERVAL = 300
 
@@ -33,4 +52,14 @@ API_TRAFFIC_AUDIT_TERMINALS = "monitoring/traffic-audit/terminals"
 API_CPU_HISTORY = "monitoring/cpu"
 API_MEMORY_HISTORY = "monitoring/memory"
 
+# Phase 2: one-shot actions (POST). All of them need CONF_ENABLE_WRITE.
+API_REBOOT_TASKS = "system/reboot-tasks"          # 立即重启
+API_BACKUP = "system/backup"                      # 手动备份配置
+API_NTP_SYNC = "system/basic/ntp:sync"            # 立即 NTP 同步
+API_UPGRADE_CHECK = "system/upgrade:check"        # 版本检测
+
+# Resource state changes rarely, but a switch must not feel laggy.
+RESOURCE_SCAN_INTERVAL = 60
+
 PLATFORMS = ["binary_sensor", "device_tracker", "sensor"]
+WRITE_PLATFORMS = ["button", "switch"]

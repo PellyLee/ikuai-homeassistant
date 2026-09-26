@@ -18,8 +18,12 @@ from .api import (
 from .const import (
     DEFAULT_CLIENT_LIMIT,
     DOMAIN,
+    EDITION_FREE,
     EXTENDED_SCAN_INTERVAL,
+    RESOURCE_SCAN_INTERVAL,
 )
+from .helpers import detect_edition
+from .resources import IkuaiResource
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +35,8 @@ class IkuaiData:
     system: dict[str, Any] = field(default_factory=dict)
     interfaces: dict[str, Any] = field(default_factory=dict)
     clients: list[dict[str, Any]] = field(default_factory=list)
+    edition: str = EDITION_FREE
+    """Auto-detected edition (free/enterprise) from `verinfo`."""
 
 
 @dataclass
@@ -49,6 +55,13 @@ class IkuaiExtendedData:
     top_terminal: dict[str, Any] | None = None
     cpu_hour_avg: float | None = None
     memory_hour_avg: float | None = None
+
+
+@dataclass
+class IkuaiResourceData:
+    """Rows of every selected CRUD group, keyed by resource key."""
+
+    rows: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
 class IkuaiDataUpdateCoordinator(DataUpdateCoordinator[IkuaiData]):
@@ -78,6 +91,8 @@ class IkuaiDataUpdateCoordinator(DataUpdateCoordinator[IkuaiData]):
             data.clients = await self.client.async_get_online_clients(self._client_limit)
         except IkuaiApiError as err:
             raise UpdateFailed(str(err)) from err
+        verinfo = (data.system.get("sysinfo") or {}).get("verinfo") or {}
+        data.edition = detect_edition(verinfo)
         return data
 
 
@@ -149,3 +164,50 @@ class IkuaiExtendedCoordinator(DataUpdateCoordinator[IkuaiExtendedData]):
                 "memory history", client.async_get_memory_history
             ),
         )
+
+
+class IkuaiResourceCoordinator(DataUpdateCoordinator[IkuaiResourceData]):
+    """Polls the CRUD groups the user opted into (switch platform source).
+
+    Only created when write support is enabled, and only for the groups the
+    user selected, so an unconfigured integration issues zero extra requests.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: IkuaiApiClient,
+        resources: list[IkuaiResource],
+        scan_interval: int = RESOURCE_SCAN_INTERVAL,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_resources",
+            update_interval=timedelta(seconds=scan_interval),
+        )
+        self.client = client
+        self.resources = resources
+
+    async def _async_update_data(self) -> IkuaiResourceData:
+        rows: dict[str, list[dict[str, Any]]] = {}
+        for resource in self.resources:
+            try:
+                rows[resource.key] = await self.client.async_list_resource(resource)
+            except IkuaiApiNotFoundError:
+                _LOGGER.debug(
+                    "Resource group %s is unavailable on this device", resource.key
+                )
+                rows[resource.key] = []
+            except IkuaiApiError as err:
+                # Keep the previous rows so entities do not flicker to unknown.
+                _LOGGER.debug("Could not refresh %s: %s", resource.key, err)
+                previous = self.data.rows.get(resource.key) if self.data else None
+                rows[resource.key] = previous if previous is not None else []
+        return IkuaiResourceData(rows=rows)
+
+    def rows_for(self, resource: IkuaiResource) -> list[dict[str, Any]]:
+        """Rows of one group, or an empty list before the first refresh."""
+        if not self.data:
+            return []
+        return self.data.rows.get(resource.key) or []

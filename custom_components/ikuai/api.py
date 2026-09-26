@@ -22,21 +22,26 @@ import aiohttp
 
 from .const import (
     API_AUTH_USERS,
+    API_BACKUP,
     API_CLIENTS_ONLINE,
     API_CPU_HISTORY,
     API_DHCP_CLIENTS,
     API_DHCP_STATIC,
     API_INTERFACES_STATUS,
     API_MEMORY_HISTORY,
+    API_NTP_SYNC,
+    API_REBOOT_TASKS,
     API_SYSTEM,
     API_TRAFFIC_AUDIT_TERMINALS,
     API_UPGRADE,
+    API_UPGRADE_CHECK,
     API_WIRELESS_STATISTICS,
     DEFAULT_CLIENT_LIMIT,
     DEFAULT_TIMEOUT,
     DEFAULT_VERIFY_SSL,
 )
 from .helpers import decode_payload, normalize_host
+from .resources import TOGGLE_BATCH, IkuaiResource
 
 
 def _to_number(value: Any) -> float | None:
@@ -60,6 +65,14 @@ class IkuaiApiAuthError(IkuaiApiError):
 
 class IkuaiApiNotFoundError(IkuaiApiError):
     """Endpoint missing - the feature is unavailable on this device/license."""
+
+
+class IkuaiApiBusinessError(IkuaiApiError):
+    """HTTP 200 but `code != 0`: the router refused the operation.
+
+    iKuai reports business failures (invalid parameter, conflict, ...) in the
+    body, so the HTTP status alone is never enough to trust a write.
+    """
 
 
 class IkuaiApiClient:
@@ -100,15 +113,25 @@ class IkuaiApiClient:
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
 
-    async def _get(
-        self, path: str, params: dict[str, Any] | None = None
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Send a request and return the decoded envelope (code / message / results)."""
         url = f"{self._base_url}/api/v4.0/{path}"
+        headers = dict(self._headers)
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
         try:
-            async with self._session.get(
+            async with self._session.request(
+                method,
                 url,
                 params=params,
-                headers=self._headers,
+                json=payload,
+                headers=headers,
                 timeout=self._timeout,
                 ssl=self._ssl,
                 allow_redirects=True,
@@ -117,7 +140,7 @@ class IkuaiApiClient:
                     raise IkuaiApiAuthError(f"Token rejected ({resp.status}) by {url}")
                 if resp.status == 404:
                     raise IkuaiApiNotFoundError(f"{url} is not available on this device")
-                if resp.status != 200:
+                if resp.status >= 400:
                     raise IkuaiApiError(f"HTTP {resp.status} from {url}")
                 raw = await resp.read()
         except aiohttp.ContentTypeError as err:
@@ -142,8 +165,94 @@ class IkuaiApiClient:
         except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as err:
             raise IkuaiApiError(f"Malformed response from {url}: {err}") from err
 
+        return data
+
+    async def _get(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """GET and return the `results` object as a dict."""
+        data = await self._request("get", path, params=params)
         results = data.get("results", data)
         return results if isinstance(results, dict) else {"data": results}
+
+    # -- Phase 2: write channel ---------------------------------------------
+
+    async def async_request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Write helper: verifies the business `code`, not just the HTTP status.
+
+        iKuai answers rejected writes with HTTP 200 and ``{"code": 30001, ...}``,
+        so anything but ``code == 0`` is raised as an error.
+        """
+        data = await self._request(method, path, params=params, payload=payload)
+        code = data.get("code", 0)
+        if code not in (0, "0"):
+            message = data.get("message") or "unknown error"
+            details = data.get("details")
+            suffix = ""
+            if isinstance(details, list) and details:
+                suffix = "; " + ", ".join(
+                    f"{item.get('field', '?')}: {item.get('msg', '')}"
+                    for item in details
+                    if isinstance(item, dict)
+                )
+            raise IkuaiApiBusinessError(f"{method} {path} failed ({code}): {message}{suffix}")
+        return data
+
+    async def async_list_resource(
+        self, resource: IkuaiResource, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """Rows of a generic resource group (empty list when unavailable)."""
+        results = await self._get(resource.path, params={"limit": limit})
+        for key in (*resource.list_keys, "data", "rows", "list"):
+            value = results.get(key)
+            if isinstance(value, list):
+                return [row for row in value if isinstance(row, dict)]
+        # Last resort: the first list-typed value in the payload.
+        for value in results.values():
+            if isinstance(value, list) and value and isinstance(value[0], dict):
+                return [row for row in value if isinstance(row, dict)]
+        return []
+
+    async def async_set_resource_enabled(
+        self, resource: IkuaiResource, row_id: Any, enabled: bool
+    ) -> None:
+        """Toggle one rule. `enabled` must be the string "yes"/"no"."""
+        state = "yes" if enabled else "no"
+        if resource.toggle == TOGGLE_BATCH:
+            # Collection-level toggle: ids are passed comma separated in the body.
+            await self.async_request(
+                "patch", resource.path, {"id": str(row_id), "enabled": state}
+            )
+            return
+        await self.async_request(
+            "patch", f"{resource.path}/{row_id}", {"enabled": state}
+        )
+
+    async def async_trigger(self, path: str, payload: dict[str, Any] | None = None) -> None:
+        """Fire a one-shot POST action (reboot, backup, NTP sync, ...)."""
+        await self.async_request("post", path, payload or {})
+
+    async def async_reboot(self) -> None:
+        """Reboot the router now - only ever called from an explicit button."""
+        await self.async_trigger(API_REBOOT_TASKS)
+
+    async def async_backup(self) -> None:
+        """Create a configuration backup on the router."""
+        await self.async_trigger(API_BACKUP)
+
+    async def async_ntp_sync(self) -> None:
+        """Force an NTP synchronisation."""
+        await self.async_trigger(API_NTP_SYNC)
+
+    async def async_check_upgrade(self) -> None:
+        """Ask the router to re-check the cloud for a newer firmware."""
+        await self.async_trigger(API_UPGRADE_CHECK)
 
     async def async_get_system(self) -> dict[str, Any]:
         """Real-time system status: CPU, temp, memory, connections, uptime, version."""

@@ -33,12 +33,14 @@
     "step": {
       "init": {
         "title": "iKuai 设置",
-        "description": "可随时修改路由器地址、令牌与轮询参数。",
+        "description": "可随时修改路由器地址、令牌与轮询参数。写操作默认关闭：需要同时打开「允许写操作」并勾选要暴露为开关的规则分组才会生效。",
         "data": {
           "host": "路由器地址",
           "token": "API 令牌",
           "verify_ssl": "校验 TLS 证书",
-          "scan_interval": "轮询间隔（秒）"
+          "scan_interval": "轮询间隔（秒）",
+          "enable_write": "允许写操作（开关与动作按钮）",
+          "resource_groups": "暴露为开关的规则分组"
         }
       }
     }
@@ -76,6 +78,12 @@
     },
     "binary_sensor": {
       "firmware_update": { "name": "固件更新" }
+    },
+    "button": {
+      "check_upgrade": { "name": "检测固件更新" },
+      "ntp_sync": { "name": "同步时间 (NTP)" },
+      "backup": { "name": "备份配置" },
+      "reboot": { "name": "重启路由器" }
     }
   }
 }

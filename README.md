@@ -34,6 +34,24 @@
 
 之后可在集成的「配置」里随时修改地址、令牌、证书校验和轮询间隔。令牌失效时 HA 会提示重新输入，不会丢已有实体。
 
+## 写操作（策略开关）与版本识别
+
+默认**只读**。如需把 iKuai 的策略规则（ACL、MAC 黑白名单、端口映射、限速、分流、
+VPN 客户端等）暴露成 HA 开关/按钮，需在集成选项里**两步确认**后才会生效：
+
+1. 打开「允许写操作」
+2. 勾选要暴露的具体规则分组
+
+两者都满足前，集成不发出任何写请求。写操作通过 `PATCH` 切换 `enabled` 字段，并严格
+校验业务返回 `code==0`；切换失败不会影响 UI 状态，下一个刷新周期会回显真实值。重启
+路由器按钮默认**禁用**，需显式开启才能按。
+
+**免费版 / 企业版自动识别**：iKuai 有免费版（装在 x86 的软件）和企业版（IK-M200 等
+硬件）之分，接口暴露不同。集成从 `verinfo` 自动判定——免费版 `modelname`/`sn` 为空，
+企业版带型号与序列号；企业版独占的分组（如 IKEv2 客户端）在免费版上**自动不暴露**，
+选项里会标注「仅企业版」。若自动判定与实际不符，可在选项里手动选「免费版 / 企业版」
+纠偏。
+
 ## 令牌与隐私
 
 - **令牌不会离开你的局域网**，本集成只和你的路由器通信，没有任何遥测或外部请求
@@ -74,14 +92,18 @@ IKUAI_HOST=10.10.10.1 IKUAI_TOKEN=xxxx python tools/dump_api.py
 ```
 custom_components/ikuai/
 ├── manifest.json      集成元数据
-├── const.py           常量与接口路径
-├── helpers.py         地址归一化（兼容各种填法）
-├── api.py             v4.0 REST 客户端
-├── coordinator.py     轮询协调器
+├── const.py           常量、接口路径、版本常量
+├── helpers.py         地址归一化、UTF-8 容错解码、版本识别
+├── api.py             v4.0 REST 客户端（读 + 写通道）
+├── coordinator.py     轮询协调器（主 / 扩展 / 资源三类）
+├── resources.py       40 个 CRUD 资源描述表 + 版本过滤
 ├── config_flow.py     配置 / 选项 / 重新认证流程
 ├── sensor.py          系统传感器 + WAN 流量传感器
-├── binary_sensor.py   WAN 线路连通性
+├── binary_sensor.py   固件更新 / WAN 线路连通性
+├── switch.py          通用资源引擎开关（按行生成）
+├── button.py          动作按钮（重启 / 备份 / NTP / 版本检测）
 ├── device_tracker.py  在线终端追踪
+├── diagnostics.py     脱敏诊断输出（含版本识别）
 └── translations/      zh-Hans / en
 tools/dump_api.py      零凭据依赖的诊断脚本
 ```

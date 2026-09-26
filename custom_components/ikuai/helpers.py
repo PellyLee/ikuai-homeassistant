@@ -17,7 +17,7 @@ import json
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from .const import DEFAULT_SCHEME
+from .const import DEFAULT_EDITION, DEFAULT_SCHEME, EDITION_ENTERPRISE, EDITION_FREE
 
 
 def normalize_host(host: str) -> str:
@@ -93,3 +93,59 @@ def client_name(client: dict[str, Any], fallback: str) -> str:
         if label:
             return label
     return fallback
+
+
+def row_label(row: dict[str, Any], fields: tuple[str, ...], fallback: str) -> str:
+    """Display name for a generic resource row.
+
+    Rule rows are usually unnamed: `comment` is empty and the only stable text
+    is the auto-generated `tagname` (e.g. "PM_1"). Fields are tried in the
+    order declared by the resource, and `tagname` is only a last resort before
+    falling back to `#<id>`.
+    """
+    for key in fields:
+        label = _best_label(row.get(key))
+        if label:
+            return label
+    return fallback
+
+
+def is_enabled(row: dict[str, Any], field: str = "enabled") -> bool:
+    """`enabled` is the string "yes"/"no" - but accept 1/0/True defensively."""
+    value = row.get(field)
+    if isinstance(value, str):
+        return value.strip().lower() in ("yes", "true", "1", "on")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return False
+
+
+def detect_edition(verinfo: dict[str, Any] | None, override: str = DEFAULT_EDITION) -> str:
+    """Decide whether the router runs free or enterprise iKuaiOS.
+
+    The firmware itself does not expose a single reliable "edition" flag:
+    ``is_enterprise`` is 0 on both real devices we tested. The pragmatic signal
+    is the hardware identity from ``verinfo`` (only the enterprise appliance
+    carries a ``modelname`` and a serial number; the free software build leaves
+    both empty). The result can be forced with ``override`` ("free"/"enterprise")
+    when auto-detection disagrees with reality.
+
+    Returns :data:`EDITION_FREE` or :data:`EDITION_ENTERPRISE`.
+    """
+    if override in (EDITION_FREE, EDITION_ENTERPRISE):
+        return override
+    info = verinfo or {}
+    if info.get("is_enterprise") in (1, "1", True, "true"):
+        return EDITION_ENTERPRISE
+    model = str(info.get("modelname") or "").strip()
+    serial = str(info.get("sn") or "").strip()
+    if model or serial:
+        return EDITION_ENTERPRISE
+    return EDITION_FREE
+
+
+def edition_label(edition: str) -> str:
+    """Human readable edition name for diagnostics / the UI."""
+    return "企业版" if edition == EDITION_ENTERPRISE else "免费版"

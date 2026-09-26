@@ -2,80 +2,89 @@
   "config": {
     "step": {
       "user": {
-        "title": "iKuai 路由器",
-        "description": "连接爱快路由器（iKuaiOS 4.x 官方 OpenAPI）。请先在路由器 Web 后台「系统设置 → API 对接」开启开关并生成令牌。地址支持 10.10.10.1、https://10.10.10.1 或带端口的形式。",
+        "title": "iKuai Router",
+        "description": "Connect to an iKuai router (official iKuaiOS 4.x OpenAPI). Enable the API switch first in the router web admin (System Settings -> API integration) and generate a token. The address accepts 192.168.1.1, https://192.168.1.1 or a host with a custom port.",
         "data": {
-          "host": "路由器地址",
-          "token": "API 令牌",
-          "name": "名称",
-          "verify_ssl": "校验 TLS 证书（路由器使用自签证书时请关闭）",
-          "scan_interval": "轮询间隔（秒）"
+          "host": "Router address",
+          "token": "API token",
+          "name": "Name",
+          "verify_ssl": "Verify TLS certificate (turn off for the self-signed router certificate)",
+          "scan_interval": "Polling interval (seconds)"
         }
       },
       "reauth_confirm": {
-        "title": "重新输入令牌",
-        "description": "令牌已失效或被重新生成，请输入新的 API 令牌。",
-        "data": { "token": "API 令牌" }
+        "title": "Re-enter token",
+        "description": "The token expired or was regenerated. Please enter the new API token.",
+        "data": { "token": "API token" }
       }
     },
     "error": {
-      "cannot_connect": "无法连接路由器，请检查地址是否可达",
-      "invalid_auth": "令牌无效或已过期",
-      "invalid_host": "地址格式不正确",
-      "unknown": "未知错误"
+      "cannot_connect": "Cannot reach the router, check the address",
+      "invalid_auth": "Token is invalid or expired",
+      "invalid_host": "Invalid address format",
+      "unknown": "Unknown error"
     },
     "abort": {
-      "already_configured": "该路由器已添加",
-      "reauth_successful": "令牌已更新"
+      "already_configured": "This router is already configured",
+      "reauth_successful": "Token updated"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "iKuai 设置",
-        "description": "可随时修改路由器地址、令牌与轮询参数。",
+        "title": "iKuai settings",
+        "description": "Change the router address, token and polling options at any time. Write support is off by default: turn it on AND pick the rule groups you want to expose as switches.",
         "data": {
-          "host": "路由器地址",
-          "token": "API 令牌",
-          "verify_ssl": "校验 TLS 证书",
-          "scan_interval": "轮询间隔（秒）"
+          "host": "Router address",
+          "token": "API token",
+          "verify_ssl": "Verify TLS certificate",
+          "scan_interval": "Polling interval (seconds)",
+          "edition": "Edition (free / enterprise)",
+          "enable_write": "Enable write operations (switches and action buttons)",
+          "resource_groups": "Rule groups exposed as switches"
         }
       }
     }
   },
   "entity": {
     "sensor": {
-      "cpu_usage": { "name": "CPU 使用率" },
-      "cpu_temp": { "name": "CPU 温度" },
-      "mem_usage": { "name": "内存使用率" },
-      "mem_used": { "name": "内存已用" },
-      "connections": { "name": "连接数" },
-      "tcp_connections": { "name": "TCP 连接数" },
-      "udp_connections": { "name": "UDP 连接数" },
-      "online_clients": { "name": "在线终端数" },
-      "upload_rate": { "name": "上传速率" },
-      "download_rate": { "name": "下载速率" },
-      "total_up": { "name": "累计上传" },
-      "total_down": { "name": "累计下载" },
-      "uptime": { "name": "运行时间" },
-      "version": { "name": "固件版本" },
-      "wan_upload": { "name": "上传速率" },
-      "wan_download": { "name": "下载速率" },
-      "wan_total_up": { "name": "累计上传" },
-      "wan_total_down": { "name": "累计下载" },
-      "dhcp_leases": { "name": "DHCP 租约数" },
-      "dhcp_static": { "name": "DHCP 静态绑定数" },
-      "auth_users": { "name": "认证用户数" },
-      "wireless_clients": { "name": "无线终端数" },
-      "wireless_aps": { "name": "AP 数量" },
-      "wireless_aps_online": { "name": "AP 在线数" },
-      "cpu_avg_1h": { "name": "CPU 近1小时均值" },
-      "memory_avg_1h": { "name": "内存近1小时均值" },
-      "top_terminal": { "name": "流量最高终端" },
-      "firmware_update": { "name": "固件更新" }
+      "cpu_usage": { "name": "CPU usage" },
+      "cpu_temp": { "name": "CPU temperature" },
+      "mem_usage": { "name": "Memory usage" },
+      "mem_used": { "name": "Memory used" },
+      "connections": { "name": "Connections" },
+      "tcp_connections": { "name": "TCP connections" },
+      "udp_connections": { "name": "UDP connections" },
+      "online_clients": { "name": "Online clients" },
+      "upload_rate": { "name": "Upload rate" },
+      "download_rate": { "name": "Download rate" },
+      "total_up": { "name": "Total upload" },
+      "total_down": { "name": "Total download" },
+      "uptime": { "name": "Uptime" },
+      "version": { "name": "Firmware version" },
+      "wan_upload": { "name": "Upload rate" },
+      "wan_download": { "name": "Download rate" },
+      "wan_total_up": { "name": "Total upload" },
+      "wan_total_down": { "name": "Total download" },
+      "dhcp_leases": { "name": "DHCP leases" },
+      "dhcp_static": { "name": "DHCP static bindings" },
+      "auth_users": { "name": "Authenticated users" },
+      "wireless_clients": { "name": "Wireless clients" },
+      "wireless_aps": { "name": "Access points" },
+      "wireless_aps_online": { "name": "Access points online" },
+      "cpu_avg_1h": { "name": "CPU average (1h)" },
+      "memory_avg_1h": { "name": "Memory average (1h)" },
+      "top_terminal": { "name": "Top traffic terminal" },
+      "firmware_update": { "name": "Firmware update" }
     },
     "binary_sensor": {
-      "firmware_update": { "name": "固件更新" }
+      "firmware_update": { "name": "Firmware update" }
+    },
+    "button": {
+      "check_upgrade": { "name": "Check for firmware update" },
+      "ntp_sync": { "name": "Sync time (NTP)" },
+      "backup": { "name": "Back up configuration" },
+      "reboot": { "name": "Reboot router" }
     }
   }
 }
