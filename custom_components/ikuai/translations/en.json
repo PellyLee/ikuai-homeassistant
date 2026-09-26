@@ -1,0 +1,68 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "iKuai 路由器",
+        "description": "连接爱快路由器（iKuaiOS 4.x 官方 OpenAPI）。请先在路由器 Web 后台「系统设置 → API 对接」开启开关并生成令牌。地址支持 10.10.10.1、https://10.10.10.1 或带端口的形式。",
+        "data": {
+          "host": "路由器地址",
+          "token": "API 令牌",
+          "name": "名称",
+          "verify_ssl": "校验 TLS 证书（路由器使用自签证书时请关闭）",
+          "scan_interval": "轮询间隔（秒）"
+        }
+      },
+      "reauth_confirm": {
+        "title": "重新输入令牌",
+        "description": "令牌已失效或被重新生成，请输入新的 API 令牌。",
+        "data": { "token": "API 令牌" }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接路由器，请检查地址是否可达",
+      "invalid_auth": "令牌无效或已过期",
+      "invalid_host": "地址格式不正确",
+      "unknown": "未知错误"
+    },
+    "abort": {
+      "already_configured": "该路由器已添加",
+      "reauth_successful": "令牌已更新"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iKuai 设置",
+        "description": "可随时修改路由器地址、令牌与轮询参数。",
+        "data": {
+          "host": "路由器地址",
+          "token": "API 令牌",
+          "verify_ssl": "校验 TLS 证书",
+          "scan_interval": "轮询间隔（秒）"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cpu_usage": { "name": "CPU 使用率" },
+      "cpu_temp": { "name": "CPU 温度" },
+      "mem_usage": { "name": "内存使用率" },
+      "mem_used": { "name": "内存已用" },
+      "connections": { "name": "连接数" },
+      "tcp_connections": { "name": "TCP 连接数" },
+      "udp_connections": { "name": "UDP 连接数" },
+      "online_clients": { "name": "在线终端数" },
+      "upload_rate": { "name": "上传速率" },
+      "download_rate": { "name": "下载速率" },
+      "total_up": { "name": "累计上传" },
+      "total_down": { "name": "累计下载" },
+      "uptime": { "name": "运行时间" },
+      "version": { "name": "固件版本" },
+      "wan_upload": { "name": "上传速率" },
+      "wan_download": { "name": "下载速率" },
+      "wan_total_up": { "name": "累计上传" },
+      "wan_total_down": { "name": "累计下载" }
+    }
+  }
+}

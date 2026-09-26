@@ -1,0 +1,27 @@
+# Keep private credentials and local artifacts out of git.
+
+# Home Assistant / local test config
+secrets.yaml
+*.yaml.bak
+config/
+
+# Local credentials for tools/dump_api.py
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local agent workspace (not part of the published integration)
+.workbuddy/
+
+# Tooling / editor
+.vscode/
+.idea/
+.DS_Store
+*.log
