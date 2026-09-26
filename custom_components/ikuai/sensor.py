@@ -296,6 +296,194 @@ def _channel_clients_attrs(data: IkuaiExtendedData) -> dict[str, Any] | None:
     return _hourly_rows(data.channel_clients, ("channel", "name", "ssid"))
 
 
+# -- Phase 4: tolerant extractors for the extended monitor endpoints --------
+# The official docs only pin down a handful of response shapes; everything the
+# Phase 4 coordinators fetch is probed field-by-field so an unexpected shape
+# degrades to "unknown" instead of crashing the platform.
+
+_SERIES_VALUE_KEYS = (
+    "value", "total", "count", "connect_num", "percent", "usage", "rate",
+)
+_SERIES_TIME_KEYS = ("time", "date", "hour", "day", "index")
+
+
+def _series_last(
+    series: list[dict[str, Any]] | None,
+    value_keys: tuple[str, ...] = _SERIES_VALUE_KEYS,
+) -> float | None:
+    """Last numeric value of a history series."""
+    if not isinstance(series, list) or not series:
+        return None
+    last = series[-1]
+    if not isinstance(last, dict):
+        return _to_float(last)
+    for key in value_keys:
+        value = _to_float(last.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _series_attrs(
+    series: list[dict[str, Any]] | None,
+    value_keys: tuple[str, ...] = _SERIES_VALUE_KEYS,
+    max_points: int = 24,
+) -> dict[str, Any] | None:
+    """History series as {time: value} attributes (bounded)."""
+    if not isinstance(series, list):
+        return None
+    attrs: dict[str, Any] = {}
+    for point in series[-max_points:]:
+        if not isinstance(point, dict):
+            continue
+        when = next(
+            (str(point.get(k)) for k in _SERIES_TIME_KEYS if point.get(k) is not None),
+            str(len(attrs)),
+        )
+        value = next(
+            (
+                _to_float(point.get(k))
+                for k in value_keys
+                if _to_float(point.get(k)) is not None
+            ),
+            None,
+        )
+        if value is not None:
+            attrs[when] = value
+    return attrs or None
+
+
+def _rows_attrs(
+    rows: list[dict[str, Any]] | None,
+    label_keys: tuple[str, ...],
+    value_keys: tuple[str, ...] = (),
+    max_rows: int = 30,
+) -> dict[str, Any] | None:
+    """List rows as {label: value-or-summary} attributes (bounded)."""
+    if not isinstance(rows, list):
+        return None
+    attrs: dict[str, Any] = {}
+    for row in rows[:max_rows]:
+        if not isinstance(row, dict):
+            continue
+        label = (
+            next((str(row.get(k)) for k in label_keys if row.get(k)), None)
+            or f"row{len(attrs) + 1}"
+        )
+        value = next(
+            (
+                _to_float(row.get(k))
+                for k in value_keys
+                if _to_float(row.get(k)) is not None
+            ),
+            None,
+        )
+        attrs[label[:60]] = value if value is not None else _trim_value(row, 1)
+    return attrs or None
+
+
+def _trim_value(value: Any, depth: int = 2) -> Any:
+    """JSON-safe bounded copy of one attribute value."""
+    if isinstance(value, dict):
+        if depth <= 0:
+            return f"<{len(value)} keys>"
+        return {
+            str(k)[:40]: _trim_value(v, depth - 1)
+            for k, v in list(value.items())[:20]
+        }
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return []
+        if depth <= 0:
+            return f"<{len(value)} items>"
+        return [_trim_value(v, depth - 1) for v in value[:20]]
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return str(value)[:200]
+
+
+def _trim_attrs(raw: Any, max_items: int = 40) -> dict[str, Any] | None:
+    """Bounded attribute view of an arbitrary response payload."""
+    if not isinstance(raw, dict):
+        return None
+    attrs = {
+        str(k)[:40]: _trim_value(v)
+        for k, v in list(raw.items())[:max_items]
+        if k != "code"
+    }
+    return attrs or None
+
+
+def _dict_metric(raw: dict[str, Any] | None) -> float | None:
+    """Best-effort single number from an arbitrary payload."""
+    if not isinstance(raw, dict):
+        return None
+    for key in ("freq", "frequency", "total", "count", "sum", "value", "rate"):
+        number = _to_float(raw.get(key))
+        if number is not None:
+            return number
+    for value in raw.values():
+        if isinstance(value, list):
+            return len(value)
+    for value in raw.values():
+        number = _to_float(value)
+        if number is not None:
+            return number
+    return None
+
+
+_ON_TEXTS = ("1", "yes", "on", "true", "running", "start", "open", "opened")
+_OFF_TEXTS = ("0", "no", "off", "false", "stopped", "stop", "close", "closed")
+
+
+def _on_off(raw: dict[str, Any] | None) -> str | None:
+    """on/off state from an arbitrary status payload."""
+    if not isinstance(raw, dict):
+        return None
+    for key in ("enabled", "run", "running", "status", "switch"):
+        value = raw.get(key)
+        if value is None:
+            continue
+        text = str(value).strip().lower()
+        if text in _ON_TEXTS:
+            return "on"
+        if text in _OFF_TEXTS:
+            return "off"
+    return None
+
+
+def _terminal_name_attrs(data: IkuaiExtendedData) -> dict[str, Any] | None:
+    if data.terminal_names is None:
+        return None
+    return _rows_attrs(data.terminal_names, ("mac", "tagname"), max_rows=60)
+
+
+def _wireguard_attrs(
+    data: IkuaiExtendedData,
+) -> dict[str, Any] | None:
+    if data.wireguard_peers is None:
+        return None
+    attrs: dict[str, Any] = {}
+    for wg_id, peers in data.wireguard_peers.items():
+        names = [
+            str(
+                peer.get("comment")
+                or str(peer.get("peer_publickey") or "")[:12]
+                or "peer"
+            )
+            for peer in peers[:20]
+            if isinstance(peer, dict)
+        ]
+        attrs[f"wg{wg_id}"] = {"count": len(peers), "peers": names}
+    return attrs or None
+
+
+def _wireguard_count(data: IkuaiExtendedData) -> int | None:
+    if data.wireguard_peers is None:
+        return None
+    return sum(len(peers) for peers in data.wireguard_peers.values())
+
+
 EXTENDED_SENSORS: tuple[ExtendedSensorDescription, ...] = (
     ExtendedSensorDescription(
         key="dhcp_leases",
@@ -394,6 +582,291 @@ EXTENDED_SENSORS: tuple[ExtendedSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: _count(d.channel_clients),
         attrs_fn=_channel_clients_attrs,
+    ),
+    # -- Phase 4: extended monitoring (Tier A) --------------------------------
+    ExtendedSensorDescription(
+        key="connections_monitor",
+        translation_key="connections_monitor",
+        name="连接数监控",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _series_last(
+            d.connections_series, ("value", "connect_num", "total", "count")
+        ),
+        attrs_fn=lambda d: _series_attrs(
+            d.connections_series, ("value", "connect_num", "total", "count")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="disk_usage_monitor",
+        translation_key="disk_usage_monitor",
+        name="磁盘使用率",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _series_last(
+            d.disk_series, ("value", "percent", "usage", "disk")
+        ),
+        attrs_fn=lambda d: _series_attrs(
+            d.disk_series, ("value", "percent", "usage", "disk")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="network_load",
+        translation_key="network_load",
+        name="网络负载监控",
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _series_last(
+            d.network_series, ("value", "total", "rate", "up", "down")
+        ),
+        attrs_fn=lambda d: _series_attrs(
+            d.network_series, ("value", "total", "rate", "up", "down")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="clients_offline",
+        translation_key="clients_offline",
+        name="IPv4 离线终端数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.clients_offline),
+        attrs_fn=lambda d: _rows_attrs(
+            d.clients_offline, ("mac", "ip", "termname", "hostname")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="clients_ip6_online",
+        translation_key="clients_ip6_online",
+        name="IPv6 在线终端数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.clients_ip6_online),
+        attrs_fn=lambda d: _rows_attrs(
+            d.clients_ip6_online, ("mac", "ip6", "host", "termname")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="clients_ip6_offline",
+        translation_key="clients_ip6_offline",
+        name="IPv6 离线终端数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.clients_ip6_offline),
+        attrs_fn=lambda d: _rows_attrs(
+            d.clients_ip6_offline, ("mac", "ip6", "host", "termname")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="app_protocols",
+        translation_key="app_protocols",
+        name="应用协议速率",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.app_protocols),
+        attrs_fn=lambda d: _rows_attrs(
+            d.app_protocols,
+            ("appname", "app_name", "name", "tagname"),
+            ("rate", "up", "down", "total"),
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="app_traffic_summary",
+        translation_key="app_traffic_summary",
+        name="24h 应用流量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.app_traffic_summary),
+        attrs_fn=lambda d: _trim_attrs(d.app_traffic_summary),
+    ),
+    ExtendedSensorDescription(
+        key="protocols",
+        translation_key="protocols",
+        name="协议分类流量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.protocols),
+        attrs_fn=lambda d: _rows_attrs(
+            d.protocols,
+            ("proto", "protocol", "name", "tagname"),
+            ("total", "up", "down"),
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="wireless_traffic",
+        translation_key="wireless_traffic",
+        name="无线流量统计",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.wireless_traffic),
+        attrs_fn=lambda d: _trim_attrs(d.wireless_traffic),
+    ),
+    ExtendedSensorDescription(
+        key="flow_shunting",
+        translation_key="flow_shunting",
+        name="分流统计",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.flow_shunting),
+        attrs_fn=lambda d: _trim_attrs(d.flow_shunting),
+    ),
+    ExtendedSensorDescription(
+        key="policy_traffic",
+        translation_key="policy_traffic",
+        name="策略监控",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.policy_traffic),
+        attrs_fn=lambda d: _trim_attrs(d.policy_traffic),
+    ),
+    ExtendedSensorDescription(
+        key="aps_channel_noise",
+        translation_key="aps_channel_noise",
+        name="AP 信道底噪",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.aps_channel_noise),
+        attrs_fn=lambda d: _rows_attrs(
+            d.aps_channel_noise,
+            ("tagname", "apname", "name", "ssid"),
+            ("noise", "channel"),
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="cameras",
+        translation_key="cameras",
+        name="摄像头数量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.cameras),
+        attrs_fn=lambda d: _rows_attrs(
+            d.cameras, ("ip", "name", "tagname", "mac")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="cloud_switches",
+        translation_key="cloud_switches",
+        name="云管交换机数量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.cloud_switches),
+        attrs_fn=lambda d: _rows_attrs(
+            d.cloud_switches, ("ip", "name", "model", "mac")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="downstream",
+        translation_key="downstream",
+        name="周边设备数量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.downstream),
+        attrs_fn=lambda d: _rows_attrs(
+            d.downstream, ("ip", "name", "type", "mac")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="dns_stats",
+        translation_key="dns_stats",
+        name="DNS 缓存状态",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.dns_stats),
+        attrs_fn=lambda d: _trim_attrs(d.dns_stats),
+    ),
+    ExtendedSensorDescription(
+        key="cpu_freq",
+        translation_key="cpu_freq",
+        name="CPU 实时频率",
+        native_unit_of_measurement="MHz",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.cpu_freq),
+        attrs_fn=lambda d: _trim_attrs(d.cpu_freq),
+    ),
+    ExtendedSensorDescription(
+        key="system_disks",
+        translation_key="system_disks",
+        name="系统磁盘",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.system_disks),
+        attrs_fn=lambda d: _rows_attrs(
+            d.system_disks,
+            ("filesys", "dev", "name", "mount", "mounted"),
+            ("total", "used", "free"),
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="interfaces_traffic",
+        translation_key="interfaces_traffic",
+        name="线路 24h 流量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.interfaces_traffic),
+        attrs_fn=lambda d: _trim_attrs(d.interfaces_traffic),
+    ),
+    ExtendedSensorDescription(
+        key="interfaces_config",
+        translation_key="interfaces_config",
+        name="接口配置",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.interfaces_config),
+        attrs_fn=lambda d: _trim_attrs(d.interfaces_config),
+    ),
+    ExtendedSensorDescription(
+        key="interfaces_physical",
+        translation_key="interfaces_physical",
+        name="物理网卡",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _dict_metric(d.interfaces_physical),
+        attrs_fn=lambda d: _trim_attrs(d.interfaces_physical),
+    ),
+    ExtendedSensorDescription(
+        key="terminal_names",
+        translation_key="terminal_names",
+        name="终端备注数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.terminal_names),
+        attrs_fn=_terminal_name_attrs,
+    ),
+    ExtendedSensorDescription(
+        key="auth_accounts",
+        translation_key="auth_accounts",
+        name="认证账号数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.auth_accounts),
+        attrs_fn=lambda d: _rows_attrs(
+            d.auth_accounts, ("username", "name"), ("enabled", "expires")
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="auth_packages",
+        translation_key="auth_packages",
+        name="认证套餐数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.auth_packages),
+        attrs_fn=lambda d: _rows_attrs(
+            d.auth_packages,
+            ("packname", "name"),
+            ("price", "up_speed", "down_speed"),
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="dhcp6_clients",
+        translation_key="dhcp6_clients",
+        name="DHCPv6 客户端数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.dhcp6_clients),
+    ),
+    ExtendedSensorDescription(
+        key="ac_status",
+        translation_key="ac_status",
+        name="AC 服务状态",
+        value_fn=lambda d: _on_off(d.ac_service),
+        attrs_fn=lambda d: _trim_attrs(d.ac_service),
+    ),
+    ExtendedSensorDescription(
+        key="ap_list",
+        translation_key="ap_list",
+        name="AP 列表",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.ap_list),
+        attrs_fn=lambda d: _rows_attrs(
+            d.ap_list,
+            ("tagname", "name", "model"),
+            ("ip", "online", "status"),
+        ),
+    ),
+    ExtendedSensorDescription(
+        key="wireguard_peers",
+        translation_key="wireguard_peers",
+        name="WireGuard 隧道数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_wireguard_count,
+        attrs_fn=_wireguard_attrs,
     ),
 )
 

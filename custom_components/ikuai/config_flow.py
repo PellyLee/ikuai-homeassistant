@@ -222,6 +222,8 @@ class IkuaiOptionsFlow(config_entries.OptionsFlow):
                 label = "[VPN] " + label
             elif res.path.endswith("-objects"):
                 label = "[对象] " + label
+            elif "dhcp6" in res.path:
+                label = "[IPv6] " + label
             if res.enterprise_only:
                 label += "（仅企业版）"
             group_labels[res.key] = label

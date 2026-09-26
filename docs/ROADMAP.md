@@ -118,7 +118,54 @@ iKuai 有「免费版」（装在 x86 上的软件）与「企业版」（IK-M20
 风险：中高（会真实改变网络行为）。验收（待做）：用户在 HA 上开启写权限后，
 对免费版 10.10.10.1 做创建→启停→删除全链路实测并确认还原；文档已明确副作用。
 
-### Phase 4 — 工程化与发布
+### Phase 4 — API 全量扩展：监控 + 配置 + 服务（v0.4.0，代码完成，免费版真机只读验证通过）
+
+基于 [coverage-gap.md](./coverage-gap.md) 的五档差距分析，落地 Tier A（监控 44 操作）
++ Tier B（配置 93 操作）全量；Tier C（日志）/ Tier D（备份恢复、升级、管理员账号、
+系统文件）/ Tier E（/ref 引用查询）按风险决策**不做**。
+
+已落地：
+
+1. **扩展监控传感器（29 个，只读）**：连接数 / 磁盘 / 网络负载历史（datetype 系列参数）、
+   离线终端、IPv6 在线/离线、应用协议流量排行/汇总/历史、协议明细、流量审计（免费版
+   404 时优雅降级）、无线流量、分流统计、策略流量、AP 信道底噪、摄像头、云管交换机、
+   周边设备、DNS 统计、CPU 实时频率、系统磁盘、接口流量/配置/物理状态、终端备注、
+   认证账号/套餐、DHCPv6 客户端、AC 服务、AP 列表、WireGuard peers。
+   架构：扩展协调器改为**两级轮询**——轻量监控每周期，重列表每 3 个周期刷新一次；
+   所有新数据走 `_async_safe` 包装，失败保留上次值（`replace(previous)`），实体不闪烁。
+2. **单例配置读写（22 项）**：`CONFIG_RESOURCES` 声明表 +
+   `async_read_modify_write_config()`——官方 schema 对 PUT 要求回传几乎全量必填字段
+   （PPPoE 27 个、WEB 认证约 150 个、AP 全配置约 200 个），因此统一实现
+   「GET 当前值 → 合并用户字段 → PUT 回写」，用户只传想改的字段。
+   危险配置（system_basic / web_auth / mac_mode / remote_access）要求 `confirm: true`。
+3. **9 个新服务**：`query`（60+ 白名单端点只读查询，业务错误原样透出）、
+   `set_config`、`speed_test`、`router_health`、`ac_service`、`restart_dhcp`、
+   `set_terminal_name`（按 MAC upsert）、`set_ssid`（`APSSIDQuickUpdate`：只需
+   id/radio/ssid_index/ssid 四个字段，是最安全的 Wi-Fi 改名通道）、
+   `api_request`（白名单内任意路径 GET/POST/PUT/DELETE，兜底官方全量能力；
+   GET 限定查询白名单，写请求需写白名单 + enable_write，Tier D 永久排除）。
+4. **白名单机制**：`QUERY_PATHS`（GET 允许表）+ `WRITE_PATHS`（含 `{id}` 槽位模板
+   匹配），路径不匹配直接拒绝——`api_request` 虽是通用通道，越界路径零放行。
+
+真机验证（免费版 10.10.10.1 / 4.0.311，`tools/live_check_free.py` v2 只发 GET）：
+
+| 探测面 | 结果 |
+|---|---|
+| 版本识别 | free ✅（modelname/sn 判据） |
+| 48 个 CRUD 组 | 46 OK / 1 PERM（wireguard，令牌权限，集成容错）/ 1 404（ikev2_clients 企业版独占）|
+| 47 个扩展监控端点 | 42 OK / 5 404（**traffic-audit 全家桶免费版不存在**，实体自动不可用）|
+| 22 个单例配置 | 21 OK / 1 404（ikev2_server 企业版独占）|
+| 5 个详情类端点 | 带 `ip+mac` / `appid` / `appids` 参数后全部 OK（参数要求已写进服务描述）|
+| edition 过滤 | ikev2_clients 正确隐藏 ✅ |
+
+新发现：**traffic-audit 5 端点免费版 404**（企业版才有），`ikev2_server` 配置与
+`ikev2_clients` 同为免费版缺失——两者均由 404 容错自然消化，实体显示不可用而非报错。
+
+待做：HA 内安装后开写权限，对免费版做 `set_config` 读改写与 `set_ssid` 全链路实测
+（写后还原）。风险：中高（配置写错影响网络），缓解：confirm 门 + 读改写不丢字段 +
+白名单限制。
+
+### Phase 5 — 工程化与发布
 - `diagnostics.py`（脱敏诊断下载）、单元测试（脱敏 payload 样本）、quality scale bronze
 - 英文本地化补全、README 实体清单自动化生成
 - 提交 HACS 默认仓库收录
@@ -130,7 +177,8 @@ iKuai 有「免费版」（装在 x86 上的软件）与「企业版」（IK-M20
 | Phase 1 | 小 | 无 |
 | Phase 2 | 中 | Phase 1 |
 | Phase 3 | 中 | Phase 2 的写通道 |
-| Phase 4 | 小 | 前三个阶段稳定后 |
+| Phase 4 | 大 | Phase 2/3 的安全模式 |
+| Phase 5 | 小 | 前四个阶段稳定后 |
 
 每阶段产出：代码 + 真机验证（至少两台）+ README 更新 + 独立版本号。
 

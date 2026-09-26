@@ -133,6 +133,102 @@
       },
       "firmware_update": {
         "name": "Firmware update"
+      },
+      "wireless_score": {
+        "name": "Wireless score"
+      },
+      "ssid_clients": {
+        "name": "SSID client stats"
+      },
+      "channel_clients": {
+        "name": "Channel client stats"
+      },
+      "connections_monitor": {
+        "name": "Connections monitor"
+      },
+      "disk_usage_monitor": {
+        "name": "Disk usage"
+      },
+      "network_load": {
+        "name": "Network load monitor"
+      },
+      "clients_offline": {
+        "name": "IPv4 offline clients"
+      },
+      "clients_ip6_online": {
+        "name": "IPv6 online clients"
+      },
+      "clients_ip6_offline": {
+        "name": "IPv6 offline clients"
+      },
+      "app_protocols": {
+        "name": "Application protocol rates"
+      },
+      "app_traffic_summary": {
+        "name": "24h app traffic"
+      },
+      "protocols": {
+        "name": "Protocol traffic"
+      },
+      "wireless_traffic": {
+        "name": "Wireless traffic"
+      },
+      "flow_shunting": {
+        "name": "Flow shunting stats"
+      },
+      "policy_traffic": {
+        "name": "Policy monitor"
+      },
+      "aps_channel_noise": {
+        "name": "AP channel noise"
+      },
+      "cameras": {
+        "name": "Cameras"
+      },
+      "cloud_switches": {
+        "name": "Cloud switches"
+      },
+      "downstream": {
+        "name": "Downstream devices"
+      },
+      "dns_stats": {
+        "name": "DNS cache status"
+      },
+      "cpu_freq": {
+        "name": "CPU frequency"
+      },
+      "system_disks": {
+        "name": "System disks"
+      },
+      "interfaces_traffic": {
+        "name": "Line 24h traffic"
+      },
+      "interfaces_config": {
+        "name": "Interface config"
+      },
+      "interfaces_physical": {
+        "name": "Physical NICs"
+      },
+      "terminal_names": {
+        "name": "Terminal names"
+      },
+      "auth_accounts": {
+        "name": "Auth accounts"
+      },
+      "auth_packages": {
+        "name": "Auth packages"
+      },
+      "dhcp6_clients": {
+        "name": "DHCPv6 clients"
+      },
+      "ac_status": {
+        "name": "AC service status"
+      },
+      "ap_list": {
+        "name": "AP list"
+      },
+      "wireguard_peers": {
+        "name": "WireGuard tunnels"
       }
     },
     "binary_sensor": {
@@ -229,6 +325,188 @@
         "name": {
           "name": "Name",
           "description": "Only remove rules whose name/comment contains this text; empty removes all"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "query": {
+      "name": "API query",
+      "description": "Read-only diagnostic query against a whitelisted router endpoint.",
+      "fields": {
+        "resource": {
+          "name": "Query item",
+          "description": "Friendly key (e.g. connections, app_traffic_summary) or a whitelisted raw path"
+        },
+        "params": {
+          "name": "Parameters",
+          "description": "Optional query parameters dict. Per-terminal detail keys need ip+mac (clients_traffic_load / client_app_protocols / client_protocols); app detail keys need appid (app_terminal_load) or appids (app_protocols_history); history series accept datetype=hour|day and math=avg|max"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "set_config": {
+      "name": "Set configuration",
+      "description": "Read-modify-write one of the 22 singleton config resources. Requires write support; dangerous keys need confirm: true.",
+      "fields": {
+        "key": {
+          "name": "Config key",
+          "description": "e.g. dns_config / pppoe_server / remote_access"
+        },
+        "fields": {
+          "name": "Fields",
+          "description": "Only the fields to change; everything else keeps its current value"
+        },
+        "confirm": {
+          "name": "Confirm dangerous",
+          "description": "Required true for dangerous configs"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "speed_test": {
+      "name": "Speed test",
+      "description": "Start / stop / check the one-click WAN speed test. Requires write support (status does not).",
+      "fields": {
+        "action": {
+          "name": "Action",
+          "description": "start / stop / status"
+        },
+        "interface": {
+          "name": "Line",
+          "description": "Line name; empty or all for every WAN line"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "router_health": {
+      "name": "Router health check",
+      "description": "Start / stop / check the router health check. Requires write support (status does not).",
+      "fields": {
+        "action": {
+          "name": "Action",
+          "description": "start / stop / status"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "ac_service": {
+      "name": "AC service",
+      "description": "Start / stop / check the wireless AC service. Requires write support (status does not).",
+      "fields": {
+        "action": {
+          "name": "Action",
+          "description": "start / stop / status"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "restart_dhcp": {
+      "name": "Restart DHCP",
+      "description": "Restart the DHCP service. Requires write support.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "set_terminal_name": {
+      "name": "Name terminal",
+      "description": "Create or update a terminal device name annotation (upsert by MAC). Requires write support.",
+      "fields": {
+        "mac": {
+          "name": "MAC address",
+          "description": "Terminal MAC"
+        },
+        "name": {
+          "name": "Name",
+          "description": "Display name (max 15 chars)"
+        },
+        "comment": {
+          "name": "Comment",
+          "description": "Comment (max 64 chars)"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "set_ssid": {
+      "name": "Set Wi-Fi SSID",
+      "description": "Quick-update one SSID of a managed AP (name/password/hidden/guest). Requires write support.",
+      "fields": {
+        "ap_id": {
+          "name": "AP id",
+          "description": "AP configuration id"
+        },
+        "radio": {
+          "name": "Radio",
+          "description": "2g for 2.4 GHz, 5g for 5 GHz"
+        },
+        "ssid_index": {
+          "name": "SSID index",
+          "description": "1-4"
+        },
+        "ssid": {
+          "name": "SSID",
+          "description": "New SSID name"
+        },
+        "key": {
+          "name": "Password",
+          "description": "Leave empty to keep the current password"
+        },
+        "hide": {
+          "name": "Hidden",
+          "description": "1 hide / 0 show"
+        },
+        "isolate": {
+          "name": "Guest mode",
+          "description": "1 on / 0 off"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "api_request": {
+      "name": "Raw API request",
+      "description": "Advanced: raw API request inside the Tier A+B whitelist; write methods need write support, dangerous endpoints are permanently blocked.",
+      "fields": {
+        "method": {
+          "name": "Method",
+          "description": "get / put / post / delete / patch"
+        },
+        "path": {
+          "name": "Path",
+          "description": "Relative path (without /api/v4.0/)"
+        },
+        "params": {
+          "name": "Parameters",
+          "description": "URL parameters dict"
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "JSON body (write methods)"
         },
         "config_entry_id": {
           "name": "Config entry",

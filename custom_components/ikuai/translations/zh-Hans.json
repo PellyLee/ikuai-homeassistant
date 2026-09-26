@@ -132,6 +132,102 @@
       },
       "firmware_update": {
         "name": "固件更新"
+      },
+      "wireless_score": {
+        "name": "无线网络评分"
+      },
+      "ssid_clients": {
+        "name": "SSID 终端统计"
+      },
+      "channel_clients": {
+        "name": "信道终端统计"
+      },
+      "connections_monitor": {
+        "name": "连接数监控"
+      },
+      "disk_usage_monitor": {
+        "name": "磁盘使用率"
+      },
+      "network_load": {
+        "name": "网络负载监控"
+      },
+      "clients_offline": {
+        "name": "IPv4 离线终端数"
+      },
+      "clients_ip6_online": {
+        "name": "IPv6 在线终端数"
+      },
+      "clients_ip6_offline": {
+        "name": "IPv6 离线终端数"
+      },
+      "app_protocols": {
+        "name": "应用协议速率"
+      },
+      "app_traffic_summary": {
+        "name": "24h 应用流量"
+      },
+      "protocols": {
+        "name": "协议分类流量"
+      },
+      "wireless_traffic": {
+        "name": "无线流量统计"
+      },
+      "flow_shunting": {
+        "name": "分流统计"
+      },
+      "policy_traffic": {
+        "name": "策略监控"
+      },
+      "aps_channel_noise": {
+        "name": "AP 信道底噪"
+      },
+      "cameras": {
+        "name": "摄像头数量"
+      },
+      "cloud_switches": {
+        "name": "云管交换机数量"
+      },
+      "downstream": {
+        "name": "周边设备数量"
+      },
+      "dns_stats": {
+        "name": "DNS 缓存状态"
+      },
+      "cpu_freq": {
+        "name": "CPU 实时频率"
+      },
+      "system_disks": {
+        "name": "系统磁盘"
+      },
+      "interfaces_traffic": {
+        "name": "线路 24h 流量"
+      },
+      "interfaces_config": {
+        "name": "接口配置"
+      },
+      "interfaces_physical": {
+        "name": "物理网卡"
+      },
+      "terminal_names": {
+        "name": "终端备注数"
+      },
+      "auth_accounts": {
+        "name": "认证账号数"
+      },
+      "auth_packages": {
+        "name": "认证套餐数"
+      },
+      "dhcp6_clients": {
+        "name": "DHCPv6 客户端数"
+      },
+      "ac_status": {
+        "name": "AC 服务状态"
+      },
+      "ap_list": {
+        "name": "AP 列表"
+      },
+      "wireguard_peers": {
+        "name": "WireGuard 隧道数"
       }
     },
     "binary_sensor": {
@@ -228,6 +324,188 @@
         "name": {
           "name": "名称",
           "description": "只删名称/备注包含该文字的规则；留空删全部"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "query": {
+      "name": "查询接口",
+      "description": "只读查询路由器 API（白名单内），用于诊断或自动化取数。",
+      "fields": {
+        "resource": {
+          "name": "查询项",
+          "description": "查询键（如 connections、app_traffic_summary、dns_config）或白名单内原始路径"
+        },
+        "params": {
+          "name": "查询参数",
+          "description": "可选查询参数字典。终端详情类需带 ip+mac（clients_traffic_load / client_app_protocols / client_protocols）；应用详情类需带 appid（app_terminal_load）或 appids（app_protocols_history）；历史序列支持 datetype=hour|day 与 math=avg|max"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "set_config": {
+      "name": "修改配置",
+      "description": "以读-改-写方式修改单例配置（22 项）。需要先启用写操作；高风险项需同时传 confirm: true。",
+      "fields": {
+        "key": {
+          "name": "配置项",
+          "description": "配置键，如 dns_config / pppoe_server / remote_access"
+        },
+        "fields": {
+          "name": "修改字段",
+          "description": "只写要改的字段，其余保持当前值"
+        },
+        "confirm": {
+          "name": "确认高风险",
+          "description": "高风险配置需传 true"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "speed_test": {
+      "name": "一键测速",
+      "description": "启动 / 停止 / 查询 WAN 口一键测速。需要先启用写操作（status 除外）。",
+      "fields": {
+        "action": {
+          "name": "动作",
+          "description": "start / stop / status"
+        },
+        "interface": {
+          "name": "测速线路",
+          "description": "线路名；留空或 all 表示全部外网线路"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "router_health": {
+      "name": "路由体检",
+      "description": "启动 / 停止 / 查询路由体检。需要先启用写操作（status 除外）。",
+      "fields": {
+        "action": {
+          "name": "动作",
+          "description": "start / stop / status"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "ac_service": {
+      "name": "AC 服务",
+      "description": "启动 / 停止 / 查询无线 AC 服务。需要先启用写操作（status 除外）。",
+      "fields": {
+        "action": {
+          "name": "动作",
+          "description": "start / stop / status"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "restart_dhcp": {
+      "name": "重启 DHCP",
+      "description": "重启 DHCP 服务。需要先启用写操作。",
+      "fields": {
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "set_terminal_name": {
+      "name": "终端命名",
+      "description": "给终端设备设置备注名（按 MAC 自动新建或更新）。需要先启用写操作。",
+      "fields": {
+        "mac": {
+          "name": "MAC 地址",
+          "description": "终端 MAC 地址"
+        },
+        "name": {
+          "name": "名称",
+          "description": "显示名（≤15 字符）"
+        },
+        "comment": {
+          "name": "备注",
+          "description": "备注信息（≤64 字符）"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "set_ssid": {
+      "name": "修改 Wi-Fi",
+      "description": "快捷修改 AP 的一个 SSID（名称/密码/隐藏/访客模式）。需要先启用写操作。",
+      "fields": {
+        "ap_id": {
+          "name": "AP 编号",
+          "description": "AP 配置 ID"
+        },
+        "radio": {
+          "name": "射频",
+          "description": "2g 表示 2.4G，5g 表示 5G"
+        },
+        "ssid_index": {
+          "name": "SSID 序号",
+          "description": "1-4"
+        },
+        "ssid": {
+          "name": "Wi-Fi 名称",
+          "description": "新的 SSID 名称"
+        },
+        "key": {
+          "name": "Wi-Fi 密码",
+          "description": "留空保持当前密码"
+        },
+        "hide": {
+          "name": "隐藏",
+          "description": "1 隐藏 / 0 不隐藏"
+        },
+        "isolate": {
+          "name": "访客模式",
+          "description": "1 开启 / 0 关闭"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "api_request": {
+      "name": "原始 API 请求",
+      "description": "白名单（Tier A+B）内发起原始 API 请求；写方法需要启用写操作，高危端点永久禁止。",
+      "fields": {
+        "method": {
+          "name": "方法",
+          "description": "get / put / post / delete / patch"
+        },
+        "path": {
+          "name": "路径",
+          "description": "相对路径（不含 /api/v4.0/）"
+        },
+        "params": {
+          "name": "查询参数",
+          "description": "URL 参数字典"
+        },
+        "payload": {
+          "name": "请求体",
+          "description": "JSON 请求体（写方法时使用）"
         },
         "config_entry_id": {
           "name": "配置条目",

@@ -371,6 +371,14 @@ RESOURCES: tuple[IkuaiResource, ...] = (
         name="时间对象",
         label_fields=("gp_name", "tagname", "comment"),
     ),
+    # -- Phase 4: DHCPv6 ------------------------------------------------------
+    IkuaiResource(
+        key="dhcp6_rules",
+        path="network/dhcp6/access-control/rules",
+        name="DHCPv6 访问控制",
+        dangerous=True,
+        extra_attrs=("mac", "tagname"),
+    ),
 )
 
 RESOURCE_BY_KEY: dict[str, IkuaiResource] = {res.key: res for res in RESOURCES}
@@ -399,3 +407,272 @@ def filter_by_edition(
     if edition != "free":
         return list(resources)
     return [res for res in resources if not res.enterprise_only]
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: singleton configuration resources (GET/PUT pairs).
+#
+# Every one of these endpoints returns the *full* configuration object and
+# expects the *full* object back on PUT (nearly all fields are required by the
+# official schema), so writes must be read-modify-write. ``dangerous`` marks
+# configs where a bad write can cut connectivity or lock the admin out; those
+# demand an extra confirmation in the set_config service.
+# ---------------------------------------------------------------------------
+
+from .const import (  # noqa: E402  (deliberately late: keeps the tables together)
+    API_AC_SERVICE,
+    API_AC_START,
+    API_AC_STOP,
+    API_ALG,
+    API_AP_CONFIG,
+    API_AP_SSID_QUICK,
+    API_AP_SSID_UNION,
+    API_AUTH_ACCOUNTS,
+    API_AUTH_PACKAGES,
+    API_BACKUP_AUTO,
+    API_CLIENTS_IP6_OFFLINE,
+    API_CLIENTS_IP6_ONLINE,
+    API_CLIENTS_OFFLINE,
+    API_CLIENTS_TRAFFIC_LOAD,
+    API_CLIENTS_TRAFFIC_SUMMARY,
+    API_CPUFREQ,
+    API_CPUFREQ_MODE,
+    API_DHCP6_ACCESS_MODE,
+    API_DHCP6_CLIENTS,
+    API_DHCP6_RULES,
+    API_DHCP_ACCESS_MODE,
+    API_DHCP_RESTART,
+    API_DNS_CONFIG,
+    API_DNS_STATS,
+    API_DOWNSTREAM,
+    API_FLOW_SHUNTING,
+    API_FTP,
+    API_INTERFACES_CONFIG,
+    API_INTERFACES_PHYSICAL_MON,
+    API_INTERFACES_TRAFFIC,
+    API_INTERFACES_TRAFFIC_V6,
+    API_IKEV2_SERVER,
+    API_KERNEL_PARAMS,
+    API_L2TP_SERVER,
+    API_MAC_MODE,
+    API_MONITOR_CONNECTIONS,
+    API_MONITOR_CPUTEMP,
+    API_MONITOR_DISK,
+    API_MONITOR_NETWORK,
+    API_MONITOR_TERMINALS,
+    API_OPENVPN_SERVER,
+    API_PPPOE_SERVER,
+    API_PPTP_SERVER,
+    API_REMOTE_ACCESS,
+    API_ROUTER_HEALTH,
+    API_SAMBA,
+    API_SECONDARY_ROUTE,
+    API_SECURITY_ADVANCED,
+    API_SNMP,
+    API_SPEED_TEST,
+    API_SYSTEM_BASIC,
+    API_SYSTEM_DISKS,
+    API_TERMINAL_NAMES,
+    API_VRRP_CONFIG,
+    API_VRRP_START,
+    API_VRRP_STOP,
+    API_WEB_AUTH_SERVICE,
+    API_WIREGUARD,
+    API_WIRELESS_TRAFFIC,
+    API_APP_PROTOCOLS_LOAD,
+    API_APP_PROTOCOLS_HISTORY,
+    API_APP_PROTOCOLS_TERMINAL_LOAD,
+    API_APP_TRAFFIC_SUMMARY,
+    API_PROTOCOLS,
+    API_PROTOCOLS_HISTORY,
+    API_AUDIT_ACCOUNTS,
+    API_AUDIT_ACCOUNT_APPS,
+    API_AUDIT_ACCOUNT_TREND,
+    API_AUDIT_TERMINAL_APPS,
+    API_AUDIT_TERMINAL_TREND,
+    API_POLICY_TRAFFIC,
+    API_APS_CHANNEL_NOISE,
+    API_CAMERAS,
+    API_CLOUD_SWITCHES,
+)
+
+
+@dataclass(frozen=True)
+class IkuaiConfigResource:
+    """One singleton GET/PUT configuration endpoint."""
+
+    key: str
+    """Stable identifier used by the set_config service."""
+
+    path: str
+    """Collection path relative to /api/v4.0/, e.g. ``network/dns/config``."""
+
+    name: str
+    """Human readable name."""
+
+    dangerous: bool = False
+    """True when a bad write can cut connectivity or lock the admin out."""
+
+    enterprise_only: bool = False
+
+
+CONFIG_RESOURCES: tuple[IkuaiConfigResource, ...] = (
+    IkuaiConfigResource("system_basic", API_SYSTEM_BASIC, "系统基础设置", dangerous=True),
+    IkuaiConfigResource("dns_config", API_DNS_CONFIG, "DNS 代理配置"),
+    IkuaiConfigResource("dhcp_access_mode", API_DHCP_ACCESS_MODE, "DHCP 访问控制模式"),
+    IkuaiConfigResource("dhcp6_access_mode", API_DHCP6_ACCESS_MODE, "DHCPv6 访问控制模式"),
+    IkuaiConfigResource("pppoe_server", API_PPPOE_SERVER, "PPPoE 服务端"),
+    IkuaiConfigResource("pptp_server", API_PPTP_SERVER, "PPTP 服务端"),
+    IkuaiConfigResource("l2tp_server", API_L2TP_SERVER, "L2TP 服务端"),
+    IkuaiConfigResource("ikev2_server", API_IKEV2_SERVER, "IKEv2/IPSec 服务端"),
+    IkuaiConfigResource("openvpn_server", API_OPENVPN_SERVER, "OpenVPN 服务端"),
+    IkuaiConfigResource("web_auth", API_WEB_AUTH_SERVICE, "WEB 认证服务", dangerous=True),
+    IkuaiConfigResource("alg", API_ALG, "ALG 配置"),
+    IkuaiConfigResource("snmp", API_SNMP, "SNMP 服务"),
+    IkuaiConfigResource("samba", API_SAMBA, "Samba 服务"),
+    IkuaiConfigResource("ftp", API_FTP, "FTP 服务"),
+    IkuaiConfigResource("security_advanced", API_SECURITY_ADVANCED, "安全中心高级设置"),
+    IkuaiConfigResource("mac_mode", API_MAC_MODE, "MAC 黑白名单模式", dangerous=True),
+    IkuaiConfigResource("remote_access", API_REMOTE_ACCESS, "远程访问", dangerous=True),
+    IkuaiConfigResource("secondary_route", API_SECONDARY_ROUTE, "网络分享控制"),
+    IkuaiConfigResource("kernel_params", API_KERNEL_PARAMS, "内核参数"),
+    IkuaiConfigResource("cpufreq_mode", API_CPUFREQ_MODE, "CPU 工作模式"),
+    IkuaiConfigResource("backup_auto", API_BACKUP_AUTO, "自动备份策略"),
+    IkuaiConfigResource("vrrp", API_VRRP_CONFIG, "VRRP 热备"),
+)
+
+CONFIG_BY_KEY: dict[str, IkuaiConfigResource] = {
+    res.key: res for res in CONFIG_RESOURCES
+}
+
+
+def filter_configs_by_edition(
+    configs: list[IkuaiConfigResource], edition: str
+) -> list[IkuaiConfigResource]:
+    """Drop enterprise-only singleton configs on the free firmware."""
+    if edition != "free":
+        return list(configs)
+    return [res for res in configs if not res.enterprise_only]
+
+
+# Friendly key -> GET path, accepted by the `ikuai.query` service. Covers every
+# Tier A read endpoint plus the singleton configs and the Phase 4 lists.
+QUERY_PATHS: dict[str, str] = {
+    # 负载监控历史（datetype/start_time/end_time/math 参数族）
+    "connections": API_MONITOR_CONNECTIONS,
+    "cputemp": API_MONITOR_CPUTEMP,
+    "disk_usage": API_MONITOR_DISK,
+    "network_load": API_MONITOR_NETWORK,
+    "terminal_count": API_MONITOR_TERMINALS,
+    # 接口
+    "interfaces_config": API_INTERFACES_CONFIG,
+    "interfaces_physical": API_INTERFACES_PHYSICAL_MON,
+    "interfaces_traffic": API_INTERFACES_TRAFFIC,
+    "interfaces_traffic_v6": API_INTERFACES_TRAFFIC_V6,
+    # 终端
+    "clients_offline": API_CLIENTS_OFFLINE,
+    "clients_ip6_online": API_CLIENTS_IP6_ONLINE,
+    "clients_ip6_offline": API_CLIENTS_IP6_OFFLINE,
+    "clients_traffic_summary": API_CLIENTS_TRAFFIC_SUMMARY,
+    "clients_traffic_load": API_CLIENTS_TRAFFIC_LOAD,
+    "client_app_protocols": "monitoring/clients/app-protocols/load",
+    "client_protocols": "monitoring/clients/protocols",
+    "client_protocols_history": "monitoring/clients/protocols/history-load",
+    # 应用/协议流量
+    "app_protocols_load": API_APP_PROTOCOLS_LOAD,
+    "app_protocols_history": API_APP_PROTOCOLS_HISTORY,
+    "app_terminal_load": API_APP_PROTOCOLS_TERMINAL_LOAD,
+    "app_traffic_summary": API_APP_TRAFFIC_SUMMARY,
+    "protocols": API_PROTOCOLS,
+    "protocols_history": API_PROTOCOLS_HISTORY,
+    # 流量审计
+    "audit_accounts": API_AUDIT_ACCOUNTS,
+    "audit_account_apps": API_AUDIT_ACCOUNT_APPS,
+    "audit_account_trend": API_AUDIT_ACCOUNT_TREND,
+    "audit_terminal_apps": API_AUDIT_TERMINAL_APPS,
+    "audit_terminal_trend": API_AUDIT_TERMINAL_TREND,
+    # 其它监控
+    "wireless_traffic": API_WIRELESS_TRAFFIC,
+    "flow_shunting": API_FLOW_SHUNTING,
+    "policy_traffic": API_POLICY_TRAFFIC,
+    "aps_channel_noise": API_APS_CHANNEL_NOISE,
+    "cameras": API_CAMERAS,
+    "cloud_switches": API_CLOUD_SWITCHES,
+    "downstream": API_DOWNSTREAM,
+    "dns_stats": API_DNS_STATS,
+    "cpu_freq": API_CPUFREQ,
+    "system_disks": API_SYSTEM_DISKS,
+    "speed_test": API_SPEED_TEST,
+    "router_health": API_ROUTER_HEALTH,
+    # 列表
+    "dhcp6_clients": API_DHCP6_CLIENTS,
+    "dhcp6_rules": API_DHCP6_RULES,
+    "ac_service": API_AC_SERVICE,
+    "ap_config": API_AP_CONFIG,
+    "terminal_names": API_TERMINAL_NAMES,
+    "auth_accounts": API_AUTH_ACCOUNTS,
+    "auth_packages": API_AUTH_PACKAGES,
+}
+QUERY_PATHS.update({res.key: res.path for res in CONFIG_RESOURCES})
+
+# Paths the `ikuai.api_request` service may touch. GET requests are limited to
+# QUERY_PATHS; everything here (plus the {id} sub-paths) is writable when the
+# entry has write support enabled. Tier D endpoints (backup restore, firmware
+# upgrade, web-admin accounts, system files) are deliberately absent.
+WRITE_PATHS: frozenset[str] = frozenset(
+    {
+        API_SPEED_TEST,   # POST 启动 / DELETE 停止
+        API_ROUTER_HEALTH,  # POST / DELETE
+        API_AC_START,
+        API_AC_STOP,
+        API_VRRP_START,
+        API_VRRP_STOP,
+        API_DHCP_RESTART,
+        API_DHCP6_RULES,
+        f"{API_DHCP6_RULES}/{{id}}",
+        API_AUTH_ACCOUNTS,
+        f"{API_AUTH_ACCOUNTS}/{{id}}",
+        API_AUTH_PACKAGES,
+        f"{API_AUTH_PACKAGES}/{{id}}",
+        API_TERMINAL_NAMES,
+        f"{API_TERMINAL_NAMES}/{{id}}",
+        "interfaces/wan-config/{id}",
+        "interfaces/lan-config/{id}",
+        "interfaces/wan-lines",
+        "interfaces/wan-lines/{id}",
+        "interfaces/lan-lines",
+        "interfaces/lan-lines/{id}",
+        API_AP_CONFIG,
+        f"{API_AP_CONFIG}/{{id}}",
+        API_AP_SSID_QUICK,
+        API_AP_SSID_UNION,
+        f"{API_WIREGUARD}/{{wg_id}}/peers",
+        f"{API_WIREGUARD}/{{wg_id}}/peers/{{peer_id}}",
+    }
+    | {res.path for res in CONFIG_RESOURCES}
+)
+
+
+def _path_matches(template: str, actual: str) -> bool:
+    """True when `actual` equals `template` or fills its {id}-style slots."""
+    t_segs = template.split("/")
+    a_segs = actual.split("/")
+    if len(t_segs) != len(a_segs):
+        return False
+    for t_seg, a_seg in zip(t_segs, a_segs):
+        if t_seg.startswith("{") and t_seg.endswith("}"):
+            if not a_seg:
+                return False
+        elif t_seg != a_seg:
+            return False
+    return True
+
+
+def query_path_allowed(path: str) -> bool:
+    """True when the GET path is in the query whitelist (exact or templated)."""
+    return any(_path_matches(allowed, path) for allowed in QUERY_PATHS.values())
+
+
+def write_path_allowed(path: str) -> bool:
+    """True when the path may be written via the api_request service."""
+    return any(_path_matches(allowed, path) for allowed in WRITE_PATHS)

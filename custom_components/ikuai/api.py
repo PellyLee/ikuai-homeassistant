@@ -21,22 +21,37 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    API_AC_SERVICE,
+    API_AC_START,
+    API_AC_STOP,
+    API_AP_CONFIG,
+    API_AP_SSID_QUICK,
+    API_AUTH_ACCOUNTS,
+    API_AUTH_PACKAGES,
     API_AUTH_USERS,
     API_BACKUP,
     API_CHANNEL_CLIENTS,
     API_CLIENTS_ONLINE,
     API_CPU_HISTORY,
+    API_DHCP6_CLIENTS,
     API_DHCP_CLIENTS,
+    API_DHCP_RESTART,
     API_DHCP_STATIC,
     API_INTERFACES_STATUS,
     API_MEMORY_HISTORY,
     API_NTP_SYNC,
     API_REBOOT_TASKS,
+    API_ROUTER_HEALTH,
+    API_SPEED_TEST,
     API_SSID_CLIENTS,
     API_SYSTEM,
+    API_TERMINAL_NAMES,
     API_TRAFFIC_AUDIT_TERMINALS,
     API_UPGRADE,
     API_UPGRADE_CHECK,
+    API_VRRP_START,
+    API_VRRP_STOP,
+    API_WIREGUARD,
     API_WIRELESS_SCORE,
     API_WIRELESS_STATISTICS,
     DEFAULT_CLIENT_LIMIT,
@@ -372,3 +387,174 @@ class IkuaiApiClient:
             if isinstance(value, list) and value and isinstance(value[0], dict):
                 return [row for row in value if isinstance(row, dict)]
         return []
+
+    # -- Phase 4: extended monitoring (Tier A) --------------------------------
+
+    async def async_get_path(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Raw GET returning the unwrapped `results` dict (query service)."""
+        return await self._get(path, params=params)
+
+    async def async_get_rows(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """GET a list endpoint, tolerating unknown row keys."""
+        return self._first_list(await self._get(path, params=params))
+
+    async def async_get_monitor_series(
+        self, path: str, datetype: str = "hour", math: str = "avg"
+    ) -> list[dict[str, Any]]:
+        """History series of the datetype monitor family (connections/disk/...)."""
+        results = await self._get(path, params={"datetype": datetype, "math": math})
+        return self._first_list(results)
+
+    async def async_get_speed_test(self) -> dict[str, Any]:
+        """One-click speed test status and last results."""
+        return await self._get(API_SPEED_TEST)
+
+    async def async_start_speed_test(self, interface: str | None = None) -> None:
+        """Start the speed test (`all`/empty lets the router pick the lines)."""
+        payload: dict[str, Any] = {}
+        if interface and str(interface).strip() and str(interface) != "all":
+            payload["interface"] = str(interface).strip()
+        await self.async_request("post", API_SPEED_TEST, payload)
+
+    async def async_stop_speed_test(self) -> None:
+        """Cancel a running speed test."""
+        await self.async_request("delete", API_SPEED_TEST)
+
+    async def async_get_router_health(self) -> dict[str, Any]:
+        """Router health check status and findings."""
+        return await self._get(API_ROUTER_HEALTH)
+
+    async def async_start_router_health(self) -> None:
+        """Start the router health check (takes a while, poll the status)."""
+        await self.async_request("post", API_ROUTER_HEALTH, {})
+
+    async def async_stop_router_health(self) -> None:
+        """Stop the router health check."""
+        await self.async_request("delete", API_ROUTER_HEALTH)
+
+    # -- Phase 4: service actions (Tier B) ------------------------------------
+
+    async def async_get_ac_service(self) -> dict[str, Any]:
+        """Wireless AC service status."""
+        return await self._get(API_AC_SERVICE)
+
+    async def async_set_ac_service(self, enabled: bool) -> None:
+        """Start or stop the wireless AC service."""
+        await self.async_request("post", API_AC_START if enabled else API_AC_STOP, {})
+
+    async def async_restart_dhcp(self) -> None:
+        """Restart the DHCP service."""
+        await self.async_request("post", API_DHCP_RESTART, {})
+
+    async def async_set_vrrp(self, enabled: bool) -> None:
+        """Start or stop VRRP hot standby."""
+        await self.async_request(
+            "post", API_VRRP_START if enabled else API_VRRP_STOP, {}
+        )
+
+    # -- Phase 4: configuration (Tier B) --------------------------------------
+
+    async def async_read_modify_write_config(
+        self, path: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Merge `fields` into the current singleton config and PUT it back.
+
+        The official PUT schemas mark nearly every field required (the WEB auth
+        config has ~150), so the router's current values must always be echoed
+        back. ``None`` values in `fields` are dropped ("keep original").
+        """
+        current = await self._get(path)
+        merged = {k: v for k, v in current.items() if k != "code"}
+        for key, value in fields.items():
+            if value is None:
+                merged.pop(key, None)
+            else:
+                merged[key] = value
+        await self.async_request("put", path, merged)
+        return merged
+
+    # -- Phase 4: Phase 4 lists ----------------------------------------------
+
+    async def async_get_terminal_names(self, limit: int = 500) -> list[dict[str, Any]]:
+        """Terminal device name annotations (mac -> tagname)."""
+        return await self.async_get_rows(API_TERMINAL_NAMES, {"limit": limit})
+
+    async def async_set_terminal_name(
+        self, mac: str, tagname: str, comment: str | None = None
+    ) -> str:
+        """Create or update one terminal name annotation; returns the row id."""
+        rows = await self.async_get_terminal_names()
+        existing = None
+        for row in rows:
+            if str(row.get("mac") or "").lower() == mac.lower():
+                existing = row
+                break
+        payload: dict[str, Any] = {"mac": mac, "tagname": tagname}
+        if comment is not None:
+            payload["comment"] = comment
+        if existing is None:
+            data = await self.async_request("post", API_TERMINAL_NAMES, payload)
+            return data.get("rowid") or (data.get("results") or {}).get("rowid")
+        row_id = existing.get("id")
+        await self.async_request("put", f"{API_TERMINAL_NAMES}/{row_id}", payload)
+        return row_id
+
+    async def async_get_auth_accounts(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Authentication user accounts (auth/users)."""
+        return await self.async_get_rows(
+            API_AUTH_ACCOUNTS, {"limit": limit, "page": 1}
+        )
+
+    async def async_get_auth_packages(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Authentication packages (auth/packages)."""
+        return await self.async_get_rows(
+            API_AUTH_PACKAGES, {"limit": limit, "page": 1}
+        )
+
+    async def async_get_dhcp6_clients(self, limit: int = 500) -> list[dict[str, Any]]:
+        """DHCPv6 client list."""
+        return await self.async_get_rows(API_DHCP6_CLIENTS, {"limit": limit})
+
+    async def async_get_ap_config(self) -> list[dict[str, Any]]:
+        """Managed AP list with their configuration summary."""
+        return await self.async_get_rows(API_AP_CONFIG)
+
+    async def async_set_ap_ssid_quick(
+        self,
+        ap_id: int,
+        radio: str,
+        ssid_index: int,
+        ssid: str,
+        optional: dict[str, Any] | None = None,
+    ) -> None:
+        """Quick-update one SSID of an AP (APSSIDQuickUpdate schema).
+
+        `optional` may carry key/hide/isolate/vlan/vlan_id/channel/
+        channel_width/txpower/enc; the router keeps current values otherwise.
+        """
+        if radio not in ("2g", "5g"):
+            raise ValueError("radio must be '2g' or '5g'")
+        if ssid_index not in (1, 2, 3, 4):
+            raise ValueError("ssid_index must be 1-4")
+        payload: dict[str, Any] = {
+            "id": int(ap_id),
+            "radio": radio,
+            "ssid_index": int(ssid_index),
+            "ssid": ssid,
+        }
+        for key, value in (optional or {}).items():
+            if value is not None:
+                payload[key] = value
+        await self.async_request("put", API_AP_SSID_QUICK, payload)
+
+    async def async_get_wireguard_interfaces(self) -> list[dict[str, Any]]:
+        """WireGuard interface rows (empty on devices without WireGuard)."""
+        return await self.async_get_rows(API_WIREGUARD)
+
+    async def async_get_wireguard_peers(self, wg_id: Any) -> list[dict[str, Any]]:
+        """Tunnel/peer rows of one WireGuard interface."""
+        return await self.async_get_rows(f"{API_WIREGUARD}/{wg_id}/peers")
