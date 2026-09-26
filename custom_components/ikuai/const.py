@@ -58,6 +58,24 @@ API_BACKUP = "system/backup"                      # 手动备份配置
 API_NTP_SYNC = "system/basic/ntp:sync"            # 立即 NTP 同步
 API_UPGRADE_CHECK = "system/upgrade:check"        # 版本检测
 
+# Phase 3: scenario services + their backing endpoints.
+API_MAC_RULES = "security/mac-rules"
+API_ACL_RULES = "security/acl-rules"
+API_SSID_CLIENTS = "monitoring/ssid-clients"
+API_CHANNEL_CLIENTS = "monitoring/channel-clients"
+API_WIRELESS_SCORE = "monitoring/wireless-score"
+
+SERVICE_BLOCK_TERMINAL = "block_terminal"
+SERVICE_ALLOW_TERMINAL = "allow_terminal"
+SERVICE_PARENTAL_CONTROL = "parental_control"
+SERVICE_CLEAR_PARENTAL_CONTROL = "clear_parental_control"
+
+# Rules created by services carry this comment marker so they can be found
+# (and cleaned up) later regardless of what the user typed as the name.
+SERVICE_MARKER = "HA集成"
+BLOCK_MARKER = f"{SERVICE_MARKER}断网"
+PARENTAL_MARKER = f"{SERVICE_MARKER}家长控制"
+
 # Resource state changes rarely, but a switch must not feel laggy.
 RESOURCE_SCAN_INTERVAL = 60
 

@@ -15,7 +15,9 @@
       "reauth_confirm": {
         "title": "重新输入令牌",
         "description": "令牌已失效或被重新生成，请输入新的 API 令牌。",
-        "data": { "token": "API 令牌" }
+        "data": {
+          "token": "API 令牌"
+        }
       }
     },
     "error": {
@@ -47,43 +49,191 @@
   },
   "entity": {
     "sensor": {
-      "cpu_usage": { "name": "CPU 使用率" },
-      "cpu_temp": { "name": "CPU 温度" },
-      "mem_usage": { "name": "内存使用率" },
-      "mem_used": { "name": "内存已用" },
-      "connections": { "name": "连接数" },
-      "tcp_connections": { "name": "TCP 连接数" },
-      "udp_connections": { "name": "UDP 连接数" },
-      "online_clients": { "name": "在线终端数" },
-      "upload_rate": { "name": "上传速率" },
-      "download_rate": { "name": "下载速率" },
-      "total_up": { "name": "累计上传" },
-      "total_down": { "name": "累计下载" },
-      "uptime": { "name": "运行时间" },
-      "version": { "name": "固件版本" },
-      "wan_upload": { "name": "上传速率" },
-      "wan_download": { "name": "下载速率" },
-      "wan_total_up": { "name": "累计上传" },
-      "wan_total_down": { "name": "累计下载" },
-      "dhcp_leases": { "name": "DHCP 租约数" },
-      "dhcp_static": { "name": "DHCP 静态绑定数" },
-      "auth_users": { "name": "认证用户数" },
-      "wireless_clients": { "name": "无线终端数" },
-      "wireless_aps": { "name": "AP 数量" },
-      "wireless_aps_online": { "name": "AP 在线数" },
-      "cpu_avg_1h": { "name": "CPU 近1小时均值" },
-      "memory_avg_1h": { "name": "内存近1小时均值" },
-      "top_terminal": { "name": "流量最高终端" },
-      "firmware_update": { "name": "固件更新" }
+      "cpu_usage": {
+        "name": "CPU 使用率"
+      },
+      "cpu_temp": {
+        "name": "CPU 温度"
+      },
+      "mem_usage": {
+        "name": "内存使用率"
+      },
+      "mem_used": {
+        "name": "内存已用"
+      },
+      "connections": {
+        "name": "连接数"
+      },
+      "tcp_connections": {
+        "name": "TCP 连接数"
+      },
+      "udp_connections": {
+        "name": "UDP 连接数"
+      },
+      "online_clients": {
+        "name": "在线终端数"
+      },
+      "upload_rate": {
+        "name": "上传速率"
+      },
+      "download_rate": {
+        "name": "下载速率"
+      },
+      "total_up": {
+        "name": "累计上传"
+      },
+      "total_down": {
+        "name": "累计下载"
+      },
+      "uptime": {
+        "name": "运行时间"
+      },
+      "version": {
+        "name": "固件版本"
+      },
+      "wan_upload": {
+        "name": "上传速率"
+      },
+      "wan_download": {
+        "name": "下载速率"
+      },
+      "wan_total_up": {
+        "name": "累计上传"
+      },
+      "wan_total_down": {
+        "name": "累计下载"
+      },
+      "dhcp_leases": {
+        "name": "DHCP 租约数"
+      },
+      "dhcp_static": {
+        "name": "DHCP 静态绑定数"
+      },
+      "auth_users": {
+        "name": "认证用户数"
+      },
+      "wireless_clients": {
+        "name": "无线终端数"
+      },
+      "wireless_aps": {
+        "name": "AP 数量"
+      },
+      "wireless_aps_online": {
+        "name": "AP 在线数"
+      },
+      "cpu_avg_1h": {
+        "name": "CPU 近1小时均值"
+      },
+      "memory_avg_1h": {
+        "name": "内存近1小时均值"
+      },
+      "top_terminal": {
+        "name": "流量最高终端"
+      },
+      "firmware_update": {
+        "name": "固件更新"
+      }
     },
     "binary_sensor": {
-      "firmware_update": { "name": "固件更新" }
+      "firmware_update": {
+        "name": "固件更新"
+      }
     },
     "button": {
-      "check_upgrade": { "name": "检测固件更新" },
-      "ntp_sync": { "name": "同步时间 (NTP)" },
-      "backup": { "name": "备份配置" },
-      "reboot": { "name": "重启路由器" }
+      "check_upgrade": {
+        "name": "检测固件更新"
+      },
+      "ntp_sync": {
+        "name": "同步时间 (NTP)"
+      },
+      "backup": {
+        "name": "备份配置"
+      },
+      "reboot": {
+        "name": "重启路由器"
+      }
+    }
+  },
+  "services": {
+    "block_terminal": {
+      "name": "断开终端",
+      "description": "将终端加入 MAC 黑名单，禁止其上网。需要先在集成选项中启用写操作。",
+      "fields": {
+        "mac": {
+          "name": "MAC 地址",
+          "description": "终端 MAC（支持冒号/横线/无分隔三种写法）"
+        },
+        "name": {
+          "name": "名称",
+          "description": "规则显示名（≤15 字符）"
+        },
+        "expires_hours": {
+          "name": "自动恢复（小时）",
+          "description": "到期规则自动失效；留空一直生效"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "allow_terminal": {
+      "name": "恢复终端上网",
+      "description": "从 MAC 黑名单移除该终端的所有规则。需要先启用写操作。",
+      "fields": {
+        "mac": {
+          "name": "MAC 地址",
+          "description": "要放行的终端 MAC 地址"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "parental_control": {
+      "name": "家长控制",
+      "description": "按每周时间表禁止指定终端上网（创建带时间模板的丢弃 ACL 规则）。需要先启用写操作。",
+      "fields": {
+        "target": {
+          "name": "目标",
+          "description": "终端 MAC 地址或 IPv4 地址"
+        },
+        "weekdays": {
+          "name": "生效日",
+          "description": "1-7 组合（1=周一…7=周日），如 12345 表示工作日"
+        },
+        "start_time": {
+          "name": "开始时间",
+          "description": "每日禁止上网开始时刻（HH:MM）"
+        },
+        "end_time": {
+          "name": "结束时间",
+          "description": "每日禁止上网结束时刻（HH:MM）"
+        },
+        "name": {
+          "name": "名称",
+          "description": "规则显示名（≤15 字符）"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
+    },
+    "clear_parental_control": {
+      "name": "清除家长控制",
+      "description": "删除由本集成创建的家长控制规则（按备注标记匹配）。需要先启用写操作。",
+      "fields": {
+        "name": {
+          "name": "名称",
+          "description": "只删名称/备注包含该文字的规则；留空删全部"
+        },
+        "config_entry_id": {
+          "name": "配置条目",
+          "description": "多台 iKuai 时指定目标路由器"
+        }
+      }
     }
   }
 }

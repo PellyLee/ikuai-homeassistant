@@ -55,6 +55,10 @@ class IkuaiExtendedData:
     top_terminal: dict[str, Any] | None = None
     cpu_hour_avg: float | None = None
     memory_hour_avg: float | None = None
+    # Phase 3: read-only wireless detail (None when unavailable / no AP).
+    wireless_score: dict[str, Any] | None = None
+    ssid_clients: list[dict[str, Any]] | None = None
+    channel_clients: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -162,6 +166,15 @@ class IkuaiExtendedCoordinator(DataUpdateCoordinator[IkuaiExtendedData]):
             ),
             memory_hour_avg=await self._async_safe(
                 "memory history", client.async_get_memory_history
+            ),
+            wireless_score=await self._async_safe(
+                "wireless score", client.async_get_wireless_score
+            ),
+            ssid_clients=await self._async_safe(
+                "ssid clients", client.async_get_ssid_clients
+            ),
+            channel_clients=await self._async_safe(
+                "channel clients", client.async_get_channel_clients
             ),
         )
 

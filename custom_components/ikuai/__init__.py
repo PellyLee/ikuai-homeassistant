@@ -42,6 +42,7 @@ from .coordinator import (
 )
 from .helpers import detect_edition
 from .resources import filter_by_edition, resolve
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class IkuaiRuntimeData:
 
     main: IkuaiDataUpdateCoordinator
     extended: IkuaiExtendedCoordinator
+    entry: ConfigEntry | None = None
     resources: IkuaiResourceCoordinator | None = None
     edition: str = EDITION_FREE
     """Resolved edition (free/enterprise), override applied over auto-detect."""
@@ -90,7 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Extended data is optional: failing calls must not block setup.
     await extended.async_config_entry_first_refresh()
 
-    runtime = IkuaiRuntimeData(main=main, extended=extended)
+    runtime = IkuaiRuntimeData(main=main, extended=extended, entry=entry)
 
     # Edition: auto-detect from the firmware, but let the user override when
     # detection disagrees. Used to hide enterprise-only resource groups.
@@ -127,6 +129,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
     hass.data[DOMAIN][entry.entry_id] = runtime
+
+    # Phase 3: scenario services (block/allow terminal, parental control).
+    # Registration is idempotent; handlers resolve the target entry per call.
+    async_setup_services(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))

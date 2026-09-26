@@ -52,6 +52,33 @@ VPN 客户端等）暴露成 HA 开关/按钮，需在集成选项里**两步确
 选项里会标注「仅企业版」。若自动判定与实际不符，可在选项里手动选「免费版 / 企业版」
 纠偏。
 
+## 场景服务（断网 / 放行 / 家长控制）
+
+在开关之外，集成注册了四个场景服务（开发者工具 → 动作里搜 `ikuai`）。
+前提同样是打开「允许写操作」，但**不要求**勾选任何规则分组：
+
+| 服务 | 作用 |
+|---|---|
+| `ikuai.block_terminal` | 把终端加入 MAC 黑名单（禁止上网），支持 `expires_hours` 到期自动恢复 |
+| `ikuai.allow_terminal` | 移除该终端在黑名单里的全部规则 |
+| `ikuai.parental_control` | 按每周时间表禁止终端上网（如工作日 22:00–07:00） |
+| `ikuai.clear_parental_control` | 删除由本集成创建的家长控制规则 |
+
+示例（自动化里调用）：
+
+```yaml
+action: ikuai.parental_control
+data:
+  target: "08:9B:4B:00:10:2E"   # MAC 或 IPv4 均可
+  weekdays: "12345"             # 1=周一 … 7=周日
+  start_time: "22:00"
+  end_time: "07:00"
+  name: "孩子工作日禁网"
+```
+
+安全说明：本集成创建的规则备注带「HA集成」标记，撤销类服务只删带标记的规则，
+不会碰你手工建的配置；`tagname` 受路由器 15 字符限制，超长会自动截断。
+
 ## 令牌与隐私
 
 - **令牌不会离开你的局域网**，本集成只和你的路由器通信，没有任何遥测或外部请求
@@ -111,16 +138,18 @@ python tools/verify_ha.py
 custom_components/ikuai/
 ├── manifest.json      集成元数据
 ├── const.py           常量、接口路径、版本常量
-├── helpers.py         地址归一化、UTF-8 容错解码、版本识别
-├── api.py             v4.0 REST 客户端（读 + 写通道）
+├── helpers.py         地址归一化、UTF-8 容错解码、版本识别、MAC/时间归一化
+├── api.py             v4.0 REST 客户端（读 + 写通道 + 创建/删除原语）
 ├── coordinator.py     轮询协调器（主 / 扩展 / 资源三类）
-├── resources.py       40 个 CRUD 资源描述表 + 版本过滤
+├── resources.py       47 个 CRUD 资源描述表（含对象组）+ 版本过滤
 ├── config_flow.py     配置 / 选项 / 重新认证流程
-├── sensor.py          系统传感器 + WAN 流量传感器
+├── sensor.py          系统传感器 + WAN 流量 + 无线评分 / SSID / 信道统计
 ├── binary_sensor.py   固件更新 / WAN 线路连通性
 ├── switch.py          通用资源引擎开关（按行生成）
 ├── button.py          动作按钮（重启 / 备份 / NTP / 版本检测）
 ├── device_tracker.py  在线终端追踪
+├── services.py        场景服务（断网 / 放行 / 家长控制）
+├── services.yaml      服务与字段定义
 ├── diagnostics.py     脱敏诊断输出（含版本识别）
 └── translations/      zh-Hans / en
 tools/dump_api.py      零凭据依赖的诊断脚本
@@ -128,10 +157,13 @@ tools/dump_api.py      零凭据依赖的诊断脚本
 
 ## 路线图
 
-- [ ] 重启 / 控制类接口（按钮、开关）
-- [ ] CPU、内存历史曲线传感器
-- [ ] 更多实体：VLAN、DHCP 客户端、VPN 状态
-- [ ] 提交 HA 官方仓库
+- [x] 通用资源引擎：47 组规则的读取 + 启停开关（含对象组、企业版独占过滤）
+- [x] 动作按钮：重启 / 备份 / NTP / 版本检测
+- [x] CPU、内存历史曲线、流量审计等扩展传感器
+- [x] 场景服务：终端断网 / 放行、家长控制（周计划）
+- [ ] 无线 AP 管理（SSID 配置下发，仅只读统计已上线）
+- [ ] 规则的创建 / 编辑 / 删除通用化（当前仅断网、家长控制场景可用）
+- [ ] 提交 HACS 默认仓库
 
 ## 已在真机交叉验证
 

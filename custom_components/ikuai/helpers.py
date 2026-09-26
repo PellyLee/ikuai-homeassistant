@@ -14,6 +14,7 @@ Two problems are solved here, both found on real devices:
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -149,3 +150,47 @@ def detect_edition(verinfo: dict[str, Any] | None, override: str = DEFAULT_EDITI
 def edition_label(edition: str) -> str:
     """Human readable edition name for diagnostics / the UI."""
     return "企业版" if edition == EDITION_ENTERPRISE else "免费版"
+
+
+_MAC_HEX = re.compile(r"[^0-9a-f]")
+
+
+def normalize_mac(value: Any) -> str | None:
+    """Normalize any common MAC spelling to lowercase colon-separated form.
+
+    Accepts ``08:9B:4B:00:10:2E``, ``08-9b-4b-00-10-2e`` and the bare
+    ``089b4b00102e``. Returns ``None`` when the value cannot be a MAC.
+    """
+    text = str(value or "").strip().lower()
+    hexed = _MAC_HEX.sub("", text)
+    if len(hexed) != 12:
+        return None
+    mac = ":".join(hexed[i : i + 2] for i in range(0, 12, 2))
+    return mac if _MAC_RE.match(mac) else None
+
+
+_MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+
+
+def mac_for_router(mac: str) -> str:
+    """Uppercase colon form preferred by the iKuai API when creating rules."""
+    return mac.upper()
+
+
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def valid_hhmm(value: str) -> bool:
+    """Whether `value` is an ``HH:MM`` 24h time (iKuai time templates)."""
+    return bool(_TIME_RE.match(str(value or "").strip()))
+
+
+def clamp_tagname(value: str | None, fallback: str) -> str:
+    """iKuai tagnames allow 1-15 chars and must not start with `-`/`_`."""
+    text = str(value or "").strip()
+    if not text:
+        text = fallback
+    text = text[:15]
+    while text and text[0] in "-_":
+        text = text[1:]
+    return text or fallback

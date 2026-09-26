@@ -328,6 +328,49 @@ RESOURCES: tuple[IkuaiResource, ...] = (
         name="Samba 用户",
         list_keys=("dir_data", "data"),
     ),
+    # -- 对象组（断网 / 家长控制等场景的前置素材，也可仅做启停开关） ----------
+    IkuaiResource(
+        key="object_ip",
+        path="ip-objects",
+        name="IP 对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
+    IkuaiResource(
+        key="object_ip6",
+        path="ip6-objects",
+        name="IPv6 对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
+    IkuaiResource(
+        key="object_mac",
+        path="mac-objects",
+        name="MAC 对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
+    IkuaiResource(
+        key="object_port",
+        path="port-objects",
+        name="端口对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
+    IkuaiResource(
+        key="object_proto",
+        path="proto-objects",
+        name="协议对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
+    IkuaiResource(
+        key="object_domain",
+        path="domain-objects",
+        name="域名对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
+    IkuaiResource(
+        key="object_time",
+        path="time-objects",
+        name="时间对象",
+        label_fields=("gp_name", "tagname", "comment"),
+    ),
 )
 
 RESOURCE_BY_KEY: dict[str, IkuaiResource] = {res.key: res for res in RESOURCES}

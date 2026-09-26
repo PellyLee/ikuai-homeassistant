@@ -95,15 +95,28 @@ iKuai 有「免费版」（装在 x86 上的软件）与「企业版」（IK-M20
 
 风险：中。写操作必须可回滚、可关闭、有确认语义。验收：开关状态与实际路由配置双向一致，断电重启 HA 后状态不漂移。
 
-### Phase 3 — 场景化控制
-| 场景 | 接口 |
-|---|---|
-| 终端断网 / 放行 | `/security/acl-mac`、`/object-mac` |
-| 家长控制（时间对象 + ACL） | `/object-time` + `/security/acl-rules` |
-| VPN 客户端启停 | WireGuard / OpenVPN / PPTP / L2TP / IKEv2 客户端组 |
-| 无线 SSID 与 AP 管理 | `/wireless/*`、`/ap-config`、`/ap-detail` |
+### Phase 3 — 场景化控制（代码完成，待 HA 内实测）
 
-风险：中高（会真实改变网络行为）。验收：提供「恢复默认」路径，文档中明确副作用。
+已落地（v0.3.0）：
+
+1. **终端断网 / 放行**：`ikuai.block_terminal` / `ikuai.allow_terminal` 服务，
+   POST/DELETE `security/mac-rules`。`expires_hours` 支持到期自动恢复。
+2. **家长控制**：`ikuai.parental_control`（周计划 + 时间模板内联，无需先建时间对象）
+   + `ikuai.clear_parental_control`（按「HA集成家长控制」备注标记撤销）。
+   关键发现：`acl-rules` 的 `src_addr.custom` 直接接受 MAC/IP 字符串，
+   `time.custom` 接受内联周计划 → 对象组不再是前置条件。
+3. **VPN 客户端启停**：Phase 2 的资源引擎已覆盖（选项流中 VPN 组打 `[VPN]` 标签）。
+4. **无线只读统计**：无线评分 / SSID 终端统计 / 信道终端统计三个传感器
+   （`monitoring/wireless-score`、`ssid-clients`、`channel-clients`），
+   无 AP 设备上优雅降级为不可用。
+5. 资源表扩充对象组（ip/ip6/mac/port/proto/domain/time-objects，共 47 组），
+   `api.py` 新增 `async_create_resource` / `async_delete_resource` 原语。
+
+安全设计：服务创建的规则备注固定带「HA集成」前缀标记，撤销服务只删带标记的规则；
+服务不依赖 `resource_groups` 勾选，但必须打开 `enable_write`。
+
+风险：中高（会真实改变网络行为）。验收（待做）：用户在 HA 上开启写权限后，
+对免费版 10.10.10.1 做创建→启停→删除全链路实测并确认还原；文档已明确副作用。
 
 ### Phase 4 — 工程化与发布
 - `diagnostics.py`（脱敏诊断下载）、单元测试（脱敏 payload 样本）、quality scale bronze

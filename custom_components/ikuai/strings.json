@@ -46,6 +46,46 @@
       }
     }
   },
+  "services": {
+    "block_terminal": {
+      "name": "断开终端",
+      "description": "将终端加入 MAC 黑名单，禁止其上网。需要先在集成选项中启用写操作。",
+      "fields": {
+        "mac": { "name": "MAC 地址", "description": "终端 MAC（支持冒号/横线/无分隔三种写法）" },
+        "name": { "name": "名称", "description": "规则显示名（≤15 字符）" },
+        "expires_hours": { "name": "自动恢复（小时）", "description": "到期规则自动失效；留空一直生效" },
+        "config_entry_id": { "name": "配置条目", "description": "多台 iKuai 时指定目标路由器" }
+      }
+    },
+    "allow_terminal": {
+      "name": "恢复终端上网",
+      "description": "从 MAC 黑名单移除该终端的所有规则。需要先启用写操作。",
+      "fields": {
+        "mac": { "name": "MAC 地址", "description": "要放行的终端 MAC 地址" },
+        "config_entry_id": { "name": "配置条目", "description": "多台 iKuai 时指定目标路由器" }
+      }
+    },
+    "parental_control": {
+      "name": "家长控制",
+      "description": "按每周时间表禁止指定终端上网（创建带时间模板的丢弃 ACL 规则）。需要先启用写操作。",
+      "fields": {
+        "target": { "name": "目标", "description": "终端 MAC 地址或 IPv4 地址" },
+        "weekdays": { "name": "生效日", "description": "1-7 组合（1=周一…7=周日），如 12345 表示工作日" },
+        "start_time": { "name": "开始时间", "description": "每日禁止上网开始时刻（HH:MM）" },
+        "end_time": { "name": "结束时间", "description": "每日禁止上网结束时刻（HH:MM）" },
+        "name": { "name": "名称", "description": "规则显示名（≤15 字符）" },
+        "config_entry_id": { "name": "配置条目", "description": "多台 iKuai 时指定目标路由器" }
+      }
+    },
+    "clear_parental_control": {
+      "name": "清除家长控制",
+      "description": "删除由本集成创建的家长控制规则（按备注标记匹配）。需要先启用写操作。",
+      "fields": {
+        "name": { "name": "名称", "description": "只删名称/备注包含该文字的规则；留空删全部" },
+        "config_entry_id": { "name": "配置条目", "description": "多台 iKuai 时指定目标路由器" }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "cpu_usage": { "name": "CPU 使用率" },
@@ -75,7 +115,10 @@
       "cpu_avg_1h": { "name": "CPU 近1小时均值" },
       "memory_avg_1h": { "name": "内存近1小时均值" },
       "top_terminal": { "name": "流量最高终端" },
-      "firmware_update": { "name": "固件更新" }
+      "firmware_update": { "name": "固件更新" },
+      "wireless_score": { "name": "无线网络评分" },
+      "ssid_clients": { "name": "SSID 终端统计" },
+      "channel_clients": { "name": "信道终端统计" }
     },
     "binary_sensor": {
       "firmware_update": { "name": "固件更新" }

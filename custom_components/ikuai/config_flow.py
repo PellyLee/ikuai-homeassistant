@@ -218,6 +218,10 @@ class IkuaiOptionsFlow(config_entries.OptionsFlow):
         group_labels = {}
         for res in RESOURCES:
             label = f"{res.name}（/{res.path}）"
+            if res.path.startswith("vpn/"):
+                label = "[VPN] " + label
+            elif res.path.endswith("-objects"):
+                label = "[对象] " + label
             if res.enterprise_only:
                 label += "（仅企业版）"
             group_labels[res.key] = label

@@ -1,0 +1,124 @@
+block_terminal:
+  name: 断开终端
+  description: 将终端加入 MAC 黑名单，禁止其上网。需要先在集成选项中启用写操作。
+  fields:
+    mac:
+      name: MAC 地址
+      description: 终端的 MAC 地址（支持 08:9B:4B:00:10:2E / 08-9b-4b-00-10-2e / 089b4b00102e）
+      required: true
+      example: "08:9B:4B:00:10:2E"
+      selector:
+        text:
+    name:
+      name: 名称
+      description: 规则显示名（最长 15 字符），同时写入备注便于识别
+      required: false
+      example: "孩子的平板"
+      selector:
+        text:
+    expires_hours:
+      name: 自动恢复（小时）
+      description: 多少小时后规则自动失效；留空表示一直生效
+      required: false
+      selector:
+        number:
+          min: 0.1
+          max: 8760
+          step: 0.5
+          unit_of_measurement: 小时
+          mode: box
+    config_entry_id:
+      name: 配置条目
+      description: 多台 iKuai 时指定目标路由器
+      required: false
+      selector:
+        config_entry:
+          integration:
+            - ikuai
+
+allow_terminal:
+  name: 恢复终端上网
+  description: 从 MAC 黑名单移除该终端的所有规则。需要先启用写操作。
+  fields:
+    mac:
+      name: MAC 地址
+      description: 要放行的终端 MAC 地址
+      required: true
+      example: "08:9B:4B:00:10:2E"
+      selector:
+        text:
+    config_entry_id:
+      name: 配置条目
+      description: 多台 iKuai 时指定目标路由器
+      required: false
+      selector:
+        config_entry:
+          integration:
+            - ikuai
+
+parental_control:
+  name: 家长控制
+  description: 按每周时间表禁止指定终端上网（创建一条带时间模板的丢弃 ACL 规则）。需要先启用写操作。
+  fields:
+    target:
+      name: 目标
+      description: 终端的 MAC 地址或 IPv4 地址
+      required: true
+      example: "08:9B:4B:00:10:2E"
+      selector:
+        text:
+    weekdays:
+      name: 生效日
+      description: 周一到周日的数字组合（1=周一 … 7=周日），如 12345 表示工作日
+      required: true
+      example: "12345"
+      selector:
+        text:
+    start_time:
+      name: 开始时间
+      description: 每日禁止上网的开始时刻（24 小时制 HH:MM）
+      required: true
+      example: "22:00"
+      selector:
+        time:
+    end_time:
+      name: 结束时间
+      description: 每日禁止上网的结束时刻（24 小时制 HH:MM）
+      required: true
+      example: "07:00"
+      selector:
+        time:
+    name:
+      name: 名称
+      description: 规则显示名（最长 15 字符），同时写入备注便于识别
+      required: false
+      example: "孩子工作日禁网"
+      selector:
+        text:
+    config_entry_id:
+      name: 配置条目
+      description: 多台 iKuai 时指定目标路由器
+      required: false
+      selector:
+        config_entry:
+          integration:
+            - ikuai
+
+clear_parental_control:
+  name: 清除家长控制
+  description: 删除由本集成创建的家长控制规则（按「HA集成家长控制」备注标记匹配）。需要先启用写操作。
+  fields:
+    name:
+      name: 名称
+      description: 只删除名称或备注包含该文字的规则；留空删除全部家长控制规则
+      required: false
+      selector:
+        text:
+    config_entry_id:
+      name: 配置条目
+      description: 多台 iKuai 时指定目标路由器
+      required: false
+      selector:
+        config_entry:
+          integration:
+            - ikuai

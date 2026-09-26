@@ -245,6 +245,57 @@ def _top_terminal_name(data: IkuaiExtendedData) -> Any:
     return client_name(terminal, str(terminal.get("mac") or "unknown"))
 
 
+_SCORE_KEYS = ("score", "total_score", "total", "value")
+
+
+def _wireless_score_value(data: IkuaiExtendedData) -> Any:
+    """Overall score field, tolerating unknown response shapes."""
+    score = data.wireless_score
+    if not isinstance(score, dict):
+        return None
+    for key in _SCORE_KEYS:
+        value = _to_float(score.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _hourly_rows(rows: list[dict[str, Any]], label_keys: tuple[str, ...]) -> dict[str, Any]:
+    """Latest client count per SSID/channel row, tolerating unknown shapes."""
+    attrs: dict[str, Any] = {}
+    for row in rows:
+        label = next(
+            (str(row.get(key)) for key in label_keys if row.get(key)), "unknown"
+        )
+        series = row.get("data") if isinstance(row.get("data"), list) else []
+        if series and isinstance(series[-1], dict):
+            last = series[-1]
+            count = _to_float(
+                last.get("count") or last.get("clt_count") or last.get("clients")
+            )
+            if count is not None:
+                attrs[label] = count
+                continue
+        for key in ("count", "clt_count", "clients"):
+            count = _to_float(row.get(key))
+            if count is not None:
+                attrs[label] = count
+                break
+    return attrs or None
+
+
+def _ssid_clients_attrs(data: IkuaiExtendedData) -> dict[str, Any] | None:
+    if data.ssid_clients is None:
+        return None
+    return _hourly_rows(data.ssid_clients, ("ssid", "name", "tagname"))
+
+
+def _channel_clients_attrs(data: IkuaiExtendedData) -> dict[str, Any] | None:
+    if data.channel_clients is None:
+        return None
+    return _hourly_rows(data.channel_clients, ("channel", "name", "ssid"))
+
+
 EXTENDED_SENSORS: tuple[ExtendedSensorDescription, ...] = (
     ExtendedSensorDescription(
         key="dhcp_leases",
@@ -318,6 +369,31 @@ EXTENDED_SENSORS: tuple[ExtendedSensorDescription, ...] = (
             if d.top_terminal
             else None
         ),
+    ),
+    ExtendedSensorDescription(
+        key="wireless_score",
+        translation_key="wireless_score",
+        name="无线网络评分",
+        native_unit_of_measurement="分",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_wireless_score_value,
+        attrs_fn=lambda d: d.wireless_score or None,
+    ),
+    ExtendedSensorDescription(
+        key="ssid_clients",
+        translation_key="ssid_clients",
+        name="SSID 终端统计",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.ssid_clients),
+        attrs_fn=_ssid_clients_attrs,
+    ),
+    ExtendedSensorDescription(
+        key="channel_clients",
+        translation_key="channel_clients",
+        name="信道终端统计",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.channel_clients),
+        attrs_fn=_channel_clients_attrs,
     ),
 )
 

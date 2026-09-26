@@ -23,6 +23,7 @@ import aiohttp
 from .const import (
     API_AUTH_USERS,
     API_BACKUP,
+    API_CHANNEL_CLIENTS,
     API_CLIENTS_ONLINE,
     API_CPU_HISTORY,
     API_DHCP_CLIENTS,
@@ -31,10 +32,12 @@ from .const import (
     API_MEMORY_HISTORY,
     API_NTP_SYNC,
     API_REBOOT_TASKS,
+    API_SSID_CLIENTS,
     API_SYSTEM,
     API_TRAFFIC_AUDIT_TERMINALS,
     API_UPGRADE,
     API_UPGRADE_CHECK,
+    API_WIRELESS_SCORE,
     API_WIRELESS_STATISTICS,
     DEFAULT_CLIENT_LIMIT,
     DEFAULT_TIMEOUT,
@@ -234,6 +237,22 @@ class IkuaiApiClient:
             "patch", f"{resource.path}/{row_id}", {"enabled": state}
         )
 
+    async def async_create_resource(
+        self, resource: IkuaiResource, payload: dict[str, Any]
+    ) -> Any:
+        """Create one row (POST /path) and return the new row id.
+
+        iKuai answers a successful create with ``{"code": 0, "rowid": 1}``;
+        the id is what services need to undo themselves later.
+        """
+        data = await self.async_request("post", resource.path, payload)
+        rowid = data.get("rowid")
+        return rowid if rowid not in (None, "") else data.get("results", {}).get("rowid")
+
+    async def async_delete_resource(self, resource: IkuaiResource, row_id: Any) -> None:
+        """Delete one row (DELETE /path/{id}). Raises on business errors."""
+        await self.async_request("delete", f"{resource.path}/{row_id}")
+
     async def async_trigger(self, path: str, payload: dict[str, Any] | None = None) -> None:
         """Fire a one-shot POST action (reboot, backup, NTP sync, ...)."""
         await self.async_request("post", path, payload or {})
@@ -327,3 +346,29 @@ class IkuaiApiClient:
         ]
         values = [v for v in values if v is not None]
         return round(sum(values) / len(values), 1) if values else None
+
+    # -- Phase 3: read-only wireless detail ----------------------------------
+
+    async def async_get_wireless_score(self) -> dict[str, Any]:
+        """Wireless quality scores over the last 24h (empty dict when no AP)."""
+        return await self._get(API_WIRELESS_SCORE)
+
+    async def async_get_ssid_clients(self) -> list[dict[str, Any]]:
+        """Per-SSID client statistics (hourly aggregates)."""
+        return self._first_list(await self._get(API_SSID_CLIENTS))
+
+    async def async_get_channel_clients(self) -> list[dict[str, Any]]:
+        """Per-channel client statistics (hourly aggregates)."""
+        return self._first_list(await self._get(API_CHANNEL_CLIENTS))
+
+    @staticmethod
+    def _first_list(results: dict[str, Any]) -> list[dict[str, Any]]:
+        """First list-of-dicts value in the payload, tolerating unknown shapes."""
+        for key in ("data", "rows", "list"):
+            value = results.get(key)
+            if isinstance(value, list):
+                return [row for row in value if isinstance(row, dict)]
+        for value in results.values():
+            if isinstance(value, list) and value and isinstance(value[0], dict):
+                return [row for row in value if isinstance(row, dict)]
+        return []

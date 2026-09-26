@@ -15,7 +15,9 @@
       "reauth_confirm": {
         "title": "Re-enter token",
         "description": "The token expired or was regenerated. Please enter the new API token.",
-        "data": { "token": "API token" }
+        "data": {
+          "token": "API token"
+        }
       }
     },
     "error": {
@@ -48,43 +50,191 @@
   },
   "entity": {
     "sensor": {
-      "cpu_usage": { "name": "CPU usage" },
-      "cpu_temp": { "name": "CPU temperature" },
-      "mem_usage": { "name": "Memory usage" },
-      "mem_used": { "name": "Memory used" },
-      "connections": { "name": "Connections" },
-      "tcp_connections": { "name": "TCP connections" },
-      "udp_connections": { "name": "UDP connections" },
-      "online_clients": { "name": "Online clients" },
-      "upload_rate": { "name": "Upload rate" },
-      "download_rate": { "name": "Download rate" },
-      "total_up": { "name": "Total upload" },
-      "total_down": { "name": "Total download" },
-      "uptime": { "name": "Uptime" },
-      "version": { "name": "Firmware version" },
-      "wan_upload": { "name": "Upload rate" },
-      "wan_download": { "name": "Download rate" },
-      "wan_total_up": { "name": "Total upload" },
-      "wan_total_down": { "name": "Total download" },
-      "dhcp_leases": { "name": "DHCP leases" },
-      "dhcp_static": { "name": "DHCP static bindings" },
-      "auth_users": { "name": "Authenticated users" },
-      "wireless_clients": { "name": "Wireless clients" },
-      "wireless_aps": { "name": "Access points" },
-      "wireless_aps_online": { "name": "Access points online" },
-      "cpu_avg_1h": { "name": "CPU average (1h)" },
-      "memory_avg_1h": { "name": "Memory average (1h)" },
-      "top_terminal": { "name": "Top traffic terminal" },
-      "firmware_update": { "name": "Firmware update" }
+      "cpu_usage": {
+        "name": "CPU usage"
+      },
+      "cpu_temp": {
+        "name": "CPU temperature"
+      },
+      "mem_usage": {
+        "name": "Memory usage"
+      },
+      "mem_used": {
+        "name": "Memory used"
+      },
+      "connections": {
+        "name": "Connections"
+      },
+      "tcp_connections": {
+        "name": "TCP connections"
+      },
+      "udp_connections": {
+        "name": "UDP connections"
+      },
+      "online_clients": {
+        "name": "Online clients"
+      },
+      "upload_rate": {
+        "name": "Upload rate"
+      },
+      "download_rate": {
+        "name": "Download rate"
+      },
+      "total_up": {
+        "name": "Total upload"
+      },
+      "total_down": {
+        "name": "Total download"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "version": {
+        "name": "Firmware version"
+      },
+      "wan_upload": {
+        "name": "Upload rate"
+      },
+      "wan_download": {
+        "name": "Download rate"
+      },
+      "wan_total_up": {
+        "name": "Total upload"
+      },
+      "wan_total_down": {
+        "name": "Total download"
+      },
+      "dhcp_leases": {
+        "name": "DHCP leases"
+      },
+      "dhcp_static": {
+        "name": "DHCP static bindings"
+      },
+      "auth_users": {
+        "name": "Authenticated users"
+      },
+      "wireless_clients": {
+        "name": "Wireless clients"
+      },
+      "wireless_aps": {
+        "name": "Access points"
+      },
+      "wireless_aps_online": {
+        "name": "Access points online"
+      },
+      "cpu_avg_1h": {
+        "name": "CPU average (1h)"
+      },
+      "memory_avg_1h": {
+        "name": "Memory average (1h)"
+      },
+      "top_terminal": {
+        "name": "Top traffic terminal"
+      },
+      "firmware_update": {
+        "name": "Firmware update"
+      }
     },
     "binary_sensor": {
-      "firmware_update": { "name": "Firmware update" }
+      "firmware_update": {
+        "name": "Firmware update"
+      }
     },
     "button": {
-      "check_upgrade": { "name": "Check for firmware update" },
-      "ntp_sync": { "name": "Sync time (NTP)" },
-      "backup": { "name": "Back up configuration" },
-      "reboot": { "name": "Reboot router" }
+      "check_upgrade": {
+        "name": "Check for firmware update"
+      },
+      "ntp_sync": {
+        "name": "Sync time (NTP)"
+      },
+      "backup": {
+        "name": "Back up configuration"
+      },
+      "reboot": {
+        "name": "Reboot router"
+      }
+    }
+  },
+  "services": {
+    "block_terminal": {
+      "name": "Block terminal",
+      "description": "Add a terminal to the MAC blacklist so it cannot access the internet. Requires enabling write support in the integration options.",
+      "fields": {
+        "mac": {
+          "name": "MAC address",
+          "description": "Terminal MAC (colon/hyphen/bare hex accepted)"
+        },
+        "name": {
+          "name": "Name",
+          "description": "Rule display name (max 15 chars)"
+        },
+        "expires_hours": {
+          "name": "Auto-expire (hours)",
+          "description": "Hours until the rule expires; leave empty for permanent"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "allow_terminal": {
+      "name": "Allow terminal",
+      "description": "Remove all blacklist rules for this terminal. Requires write support.",
+      "fields": {
+        "mac": {
+          "name": "MAC address",
+          "description": "MAC of the terminal to unblock"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "parental_control": {
+      "name": "Parental control",
+      "description": "Block internet access for a terminal on a weekly schedule (creates a drop ACL rule with a time template). Requires write support.",
+      "fields": {
+        "target": {
+          "name": "Target",
+          "description": "Terminal MAC or IPv4 address"
+        },
+        "weekdays": {
+          "name": "Days",
+          "description": "Digits 1-7 (1=Monday ... 7=Sunday), e.g. 12345 for weekdays"
+        },
+        "start_time": {
+          "name": "Start time",
+          "description": "Daily block start (HH:MM)"
+        },
+        "end_time": {
+          "name": "End time",
+          "description": "Daily block end (HH:MM)"
+        },
+        "name": {
+          "name": "Name",
+          "description": "Rule display name (max 15 chars)"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
+    },
+    "clear_parental_control": {
+      "name": "Clear parental control",
+      "description": "Delete parental-control rules created by this integration (matched by comment marker). Requires write support.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Only remove rules whose name/comment contains this text; empty removes all"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Target router when multiple iKuai entries exist"
+        }
+      }
     }
   }
 }
