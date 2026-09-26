@@ -21,6 +21,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .. import IkuaiRuntimeData
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import IkuaiDataUpdateCoordinator
 from .helpers import client_name
@@ -32,7 +33,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up client trackers, adding entities dynamically as devices appear."""
-    coordinator: IkuaiDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    runtime: IkuaiRuntimeData = hass.data[DOMAIN][entry.entry_id]
+    coordinator = runtime.main
     known: set[str] = set()
 
     @callback

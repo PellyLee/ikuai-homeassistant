@@ -62,7 +62,20 @@
       "wan_upload": { "name": "上传速率" },
       "wan_download": { "name": "下载速率" },
       "wan_total_up": { "name": "累计上传" },
-      "wan_total_down": { "name": "累计下载" }
+      "wan_total_down": { "name": "累计下载" },
+      "dhcp_leases": { "name": "DHCP 租约数" },
+      "dhcp_static": { "name": "DHCP 静态绑定数" },
+      "auth_users": { "name": "认证用户数" },
+      "wireless_clients": { "name": "无线终端数" },
+      "wireless_aps": { "name": "AP 数量" },
+      "wireless_aps_online": { "name": "AP 在线数" },
+      "cpu_avg_1h": { "name": "CPU 近1小时均值" },
+      "memory_avg_1h": { "name": "内存近1小时均值" },
+      "top_terminal": { "name": "流量最高终端" },
+      "firmware_update": { "name": "固件更新" }
+    },
+    "binary_sensor": {
+      "firmware_update": { "name": "固件更新" }
     }
   }
 }

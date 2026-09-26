@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -23,11 +24,20 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
+    EXTENDED_SCAN_INTERVAL,
     PLATFORMS,
 )
-from .coordinator import IkuaiDataUpdateCoordinator
+from .coordinator import IkuaiDataUpdateCoordinator, IkuaiExtendedCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class IkuaiRuntimeData:
+    """Coordinators stored for a config entry."""
+
+    main: IkuaiDataUpdateCoordinator
+    extended: IkuaiExtendedCoordinator
 
 
 def merged_config(entry: ConfigEntry) -> dict:
@@ -47,24 +57,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     session = async_get_clientsession(hass, verify_ssl=verify_ssl)
     client = IkuaiApiClient(
-        session,
-        config[CONF_HOST],
-        config[CONF_TOKEN],
-        verify_ssl=verify_ssl,
-    )
-    coordinator = IkuaiDataUpdateCoordinator(
-        hass, client, scan_interval, DEFAULT_CLIENT_LIMIT
+        session, config[CONF_HOST], config[CONF_TOKEN], verify_ssl=verify_ssl
     )
 
+    main = IkuaiDataUpdateCoordinator(hass, client, scan_interval, DEFAULT_CLIENT_LIMIT)
+    extended = IkuaiExtendedCoordinator(hass, client, EXTENDED_SCAN_INTERVAL)
+
     try:
-        await coordinator.async_config_entry_first_refresh()
+        await main.async_config_entry_first_refresh()
     except IkuaiApiAuthError as err:
         raise ConfigEntryAuthFailed(f"Invalid iKuai token: {err}") from err
     except IkuaiApiConnectionError as err:
-        coordinator.last_update_success = False
-        _LOGGER.warning("Cannot reach iKuai router, will retry: %s", err)
+        _LOGGER.warning("Cannot reach the iKuai router yet, will retry: %s", err)
 
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    # Extended data is optional: failing calls must not block setup.
+    await extended.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id] = IkuaiRuntimeData(main=main, extended=extended)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))

@@ -58,12 +58,32 @@ client_name = _helpers.client_name
 API_SYSTEM = _const.API_SYSTEM
 API_INTERFACES_STATUS = _const.API_INTERFACES_STATUS
 API_CLIENTS_ONLINE = _const.API_CLIENTS_ONLINE
+API_DHCP_CLIENTS = _const.API_DHCP_CLIENTS
+API_DHCP_STATIC = _const.API_DHCP_STATIC
+API_AUTH_USERS = _const.API_AUTH_USERS
+API_UPGRADE = _const.API_UPGRADE
+API_WIRELESS_STATISTICS = _const.API_WIRELESS_STATISTICS
+API_TRAFFIC_AUDIT_TERMINALS = _const.API_TRAFFIC_AUDIT_TERMINALS
+API_CPU_HISTORY = _const.API_CPU_HISTORY
+API_MEMORY_HISTORY = _const.API_MEMORY_HISTORY
 
 ENDPOINTS = {
     "system": API_SYSTEM,
     "interfaces": API_INTERFACES_STATUS,
     "clients": f"{API_CLIENTS_ONLINE}?limit=256",
+    # Phase 1: read-only breadth. Unavailable endpoints are tolerated.
+    "dhcp_clients": f"{API_DHCP_CLIENTS}?limit=500",
+    "dhcp_static": f"{API_DHCP_STATIC}?limit=500",
+    "auth_users": f"{API_AUTH_USERS}?limit=200",
+    "upgrade": API_UPGRADE,
+    "wireless": API_WIRELESS_STATISTICS,
+    "traffic_audit": f"{API_TRAFFIC_AUDIT_TERMINALS}?limit=10",
+    "cpu_hour": f"{API_CPU_HISTORY}?datetype=hour&math=avg",
+    "memory_hour": f"{API_MEMORY_HISTORY}?datetype=hour&math=avg",
 }
+
+# Endpoints that legitimately return 404 on devices without the feature.
+OPTIONAL = {"traffic_audit", "wireless", "dhcp_static", "auth_users"}
 
 
 def build_opener(verify_ssl: bool) -> urllib.request.OpenerDirector:
@@ -75,7 +95,12 @@ def build_opener(verify_ssl: bool) -> urllib.request.OpenerDirector:
     return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
 
 
-def fetch(opener: urllib.request.OpenerDirector, url: str, token: str) -> Any:
+def fetch(
+    opener: urllib.request.OpenerDirector,
+    url: str,
+    token: str,
+    optional: bool = False,
+) -> Any:
     request = urllib.request.Request(
         url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}
     )
@@ -91,6 +116,9 @@ def fetch(opener: urllib.request.OpenerDirector, url: str, token: str) -> Any:
             # decode_payload tolerates the malformed hostnames some clients send
             return decode_payload(response.read())
     except urllib.error.HTTPError as err:
+        if optional and err.code == 404:
+            print(f"  (optional endpoint missing: {url})")
+            return {}
         raise SystemExit(f"HTTP {err.code} for {url}") from err
     except (urllib.error.URLError, TimeoutError) as err:
         raise SystemExit(
@@ -144,6 +172,57 @@ def summarize(payloads: dict[str, Any]) -> None:
     for client in clients:
         name = client_name(client, client.get("mac") or "?")
         print(f"  - {name} / {client.get('ip_addr')} / {client.get('mac')} / ssid={client.get('ssid') or '-'}")
+
+    # --- Phase 1: read-only breadth -------------------------------------
+    print("== dhcp / auth")
+    leases = (payloads["dhcp_clients"].get("results") or {}).get("data") or []
+    static = (payloads["dhcp_static"].get("results") or {}).get("static_data")
+    if static is None:
+        static = (payloads["dhcp_static"].get("results") or {}).get("data") or []
+    auth = (payloads["auth_users"].get("results") or {}).get("data") or []
+    print(f"  dhcp leases     : {len(leases) or '(none)'}")
+    print(f"  static bindings : {len(static) or '(none)'}")
+    print(f"  auth users      : {len(auth) or '(none)'}")
+
+    print("== firmware")
+    upgrade = (payloads["upgrade"].get("results") or {}).get("data") or {}
+    current = upgrade.get("system_ver")
+    offered = upgrade.get("new_system_ver")
+    state = "unknown"
+    if current and offered:
+        state = "update available" if offered != current else "up to date"
+    print(f"  installed       : {current}")
+    print(f"  offered         : {offered}")
+    print(f"  state           : {state}")
+
+    print("== wireless")
+    wireless = payloads["wireless"].get("results") or {}
+    ap = wireless.get("ap_status") or {}
+    clt = wireless.get("clt_status") or {}
+    print(f"  ap              : {ap.get('ap_count', '-')} total, {ap.get('ap_online', '-')} online")
+    print(f"  clients         : {clt.get('clt_count', '-')} (2.4G {clt.get('clt_count_2g', '-')}, 5G {clt.get('clt_count_5g', '-')})")
+
+    print("== traffic audit (optional)")
+    audit = payloads["traffic_audit"].get("results") or {}
+    terminals = audit.get("daytime") or audit.get("data") or []
+    if terminals:
+        top = max(
+            terminals,
+            key=lambda t: (t.get("sum_total_down") or 0) + (t.get("sum_total_up") or 0),
+        )
+        print(f"  top terminal    : {client_name(top, top.get('mac') or '?')} "
+              f"(up {top.get('sum_total_up')}, down {top.get('sum_total_down')})")
+    else:
+        print("  (not available)")
+
+    print("== hourly averages")
+    for key, field, unit in (("cpu_hour", "cpu", "cpu"), ("memory_hour", "memory", "memory_use")):
+        series = (payloads[key].get("results") or {}).get(field) or []
+        values = [to_float(item.get(unit)) for item in series if isinstance(item, dict)]
+        values = [v for v in values if v is not None]
+        avg = round(sum(values) / len(values), 1) if values else None
+        print(f"  {key:<12} : {avg if avg is not None else '(no data)'}")
+
     print("\nNote: this output contains private LAN details - redact before sharing.")
 
 
@@ -166,7 +245,9 @@ def main() -> None:
 
     payloads: dict[str, Any] = {}
     for key, path in ENDPOINTS.items():
-        payloads[key] = fetch(opener, f"{base}/api/v4.0/{path}", token)
+        payloads[key] = fetch(
+            opener, f"{base}/api/v4.0/{path}", token, optional=key in OPTIONAL
+        )
 
     if args.raw:
         print(json.dumps(payloads, ensure_ascii=False, indent=2))

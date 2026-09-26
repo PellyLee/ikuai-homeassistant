@@ -31,8 +31,14 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .. import IkuaiRuntimeData
 from .const import DOMAIN, MANUFACTURER
-from .coordinator import IkuaiDataUpdateCoordinator
+from .coordinator import (
+    IkuaiDataUpdateCoordinator,
+    IkuaiExtendedCoordinator,
+    IkuaiExtendedData,
+)
+from .helpers import client_name
 
 
 def _sysinfo(coordinator: IkuaiDataUpdateCoordinator) -> dict[str, Any]:
@@ -208,6 +214,114 @@ WAN_SENSORS: tuple[WanSensorDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class ExtendedSensorDescription(SensorEntityDescription):
+    """Describes a sensor fed by the slow-polling coordinator."""
+
+    value_fn: Callable[[IkuaiExtendedData], Any]
+    attrs_fn: Callable[[IkuaiExtendedData], dict[str, Any] | None] | None = None
+
+
+def _wireless(data: IkuaiExtendedData) -> dict[str, Any]:
+    return data.wireless or {}
+
+
+def _wireless_clients(data: IkuaiExtendedData) -> dict[str, Any]:
+    return (_wireless(data).get("clt_status")) or {}
+
+
+def _ap_status(data: IkuaiExtendedData) -> dict[str, Any]:
+    return (_wireless(data).get("ap_status")) or {}
+
+
+def _count(value: list | None) -> int | None:
+    return len(value) if value is not None else None
+
+
+def _top_terminal_name(data: IkuaiExtendedData) -> Any:
+    terminal = data.top_terminal
+    if not terminal:
+        return None
+    return client_name(terminal, str(terminal.get("mac") or "unknown"))
+
+
+EXTENDED_SENSORS: tuple[ExtendedSensorDescription, ...] = (
+    ExtendedSensorDescription(
+        key="dhcp_leases",
+        translation_key="dhcp_leases",
+        name="DHCP 租约数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.dhcp_clients),
+    ),
+    ExtendedSensorDescription(
+        key="dhcp_static",
+        translation_key="dhcp_static",
+        name="DHCP 静态绑定数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.dhcp_static),
+    ),
+    ExtendedSensorDescription(
+        key="auth_users",
+        translation_key="auth_users",
+        name="认证用户数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _count(d.auth_users),
+    ),
+    ExtendedSensorDescription(
+        key="wireless_clients",
+        translation_key="wireless_clients",
+        name="无线终端数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _wireless_clients(d).get("clt_count"),
+    ),
+    ExtendedSensorDescription(
+        key="wireless_aps",
+        translation_key="wireless_aps",
+        name="AP 数量",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _ap_status(d).get("ap_count"),
+    ),
+    ExtendedSensorDescription(
+        key="wireless_aps_online",
+        translation_key="wireless_aps_online",
+        name="AP 在线数",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: _ap_status(d).get("ap_online"),
+    ),
+    ExtendedSensorDescription(
+        key="cpu_avg_1h",
+        translation_key="cpu_avg_1h",
+        name="CPU 近1小时均值",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: d.cpu_hour_avg,
+    ),
+    ExtendedSensorDescription(
+        key="memory_avg_1h",
+        translation_key="memory_avg_1h",
+        name="内存近1小时均值",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: d.memory_hour_avg,
+    ),
+    ExtendedSensorDescription(
+        key="top_terminal",
+        translation_key="top_terminal",
+        name="流量最高终端",
+        value_fn=_top_terminal_name,
+        attrs_fn=lambda d: (
+            {
+                "mac": d.top_terminal.get("mac"),
+                "total_up": d.top_terminal.get("sum_total_up"),
+                "total_down": d.top_terminal.get("sum_total_down"),
+            }
+            if d.top_terminal
+            else None
+        ),
+    ),
+)
+
+
 def _first(value: Any) -> Any:
     """Return the first item of a list, or the value itself."""
     if isinstance(value, (list, tuple)):
@@ -300,6 +414,42 @@ class IkuaiSensor(CoordinatorEntity[IkuaiDataUpdateCoordinator], SensorEntity):
         return super().available
 
 
+class IkuaiExtendedSensor(CoordinatorEntity[IkuaiExtendedCoordinator], SensorEntity):
+    """Sensor fed by the slow-polling coordinator."""
+
+    entity_description: ExtendedSensorDescription
+
+    def __init__(
+        self,
+        coordinator: IkuaiExtendedCoordinator,
+        entry: ConfigEntry,
+        description: ExtendedSensorDescription,
+        main: IkuaiDataUpdateCoordinator,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_device_info = _device_info(entry, main)
+
+    @property
+    def native_value(self) -> Any:
+        value = self.entity_description.value_fn(self.coordinator.data)
+        return value if value is not None else STATE_UNKNOWN
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.coordinator.data)
+
+    @property
+    def available(self) -> bool:
+        # Features missing on the device report no value but keep the entity
+        if self.native_value in (STATE_UNKNOWN, None):
+            return False
+        return super().available
+
+
 class IkuaiWanSensor(CoordinatorEntity[IkuaiDataUpdateCoordinator], SensorEntity):
     """Per-WAN traffic sensor backed by /monitoring/interfaces-status."""
 
@@ -342,10 +492,15 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up iKuai sensors from a config entry."""
-    coordinator: IkuaiDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    runtime: IkuaiRuntimeData = hass.data[DOMAIN][entry.entry_id]
+    coordinator = runtime.main
 
     async_add_entities(
         IkuaiSensor(coordinator, entry, description) for description in SENSORS
+    )
+    async_add_entities(
+        IkuaiExtendedSensor(runtime.extended, entry, description, coordinator)
+        for description in EXTENDED_SENSORS
     )
 
     known: set[str] = set()

@@ -31,7 +31,18 @@ DELETE /xxx/{id}       删除
 `/monitoring/system`、`/monitoring/interfaces-status`、`/monitoring/clients-online`
 → 系统传感器、线路连通与流量、设备追踪。
 
-### Phase 1 — 只读面扩展
+### Phase 1 — 只读面扩展（已完成）
+双机验证结果：
+
+| 项 | 设备 A（4.0.311） | 设备 B（4.0.303） |
+|---|---|---|
+| DHCP 租约 / 静态绑定 | 8 / 7 | 61 / 48 |
+| 固件 | 已是最新（4.0.311） | **有更新**（4.0.303 → 4.0.311） |
+| 流量审计 | 404，优雅降级为不可用 | 最高终端「海康威视监控」 |
+| CPU / 内存小时均值 | 4.3% / 43.0% | 8.6% / 76.3% |
+| 无线 | 均为 0（无 AC 纳管 AP） | 均为 0 |
+
+新增接口：
 | 目标 | 接口 |
 |---|---|
 | DHCP 客户端与静态绑定 | `/network/dhcp/clients`、`/network/dhcp/static` |
@@ -41,7 +52,11 @@ DELETE /xxx/{id}       删除
 | 流量审计 Top N | `/monitoring/traffic-audit/*` |
 | 历史曲线（CPU / 内存） | `/monitoring/cpu`、`/monitoring/memory`（datetype 参数） |
 
-风险：低。验收：两台真机均可用，无新增写操作。
+架构：新增 `IkuaiExtendedCoordinator`（300 秒轮询），每个接口独立容错——
+某功能在设备上不存在（404）时只影响对应实体，写 `IkuaiExtendedData` 的
+对应字段为 `None`，实体自动变为不可用。后续阶段沿用此模式。
+
+风险：低。验收（已通过）：两台真机均可用，无新增写操作。
 
 ### Phase 2 — 通用资源引擎 + 策略开关（核心价值）
 1. `api.py` 增加 `async_request(method, path, json)`，统一 PATCH/PUT/POST/DELETE

@@ -21,14 +21,29 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    API_AUTH_USERS,
     API_CLIENTS_ONLINE,
+    API_CPU_HISTORY,
+    API_DHCP_CLIENTS,
+    API_DHCP_STATIC,
     API_INTERFACES_STATUS,
+    API_MEMORY_HISTORY,
     API_SYSTEM,
+    API_TRAFFIC_AUDIT_TERMINALS,
+    API_UPGRADE,
+    API_WIRELESS_STATISTICS,
     DEFAULT_CLIENT_LIMIT,
     DEFAULT_TIMEOUT,
     DEFAULT_VERIFY_SSL,
 )
 from .helpers import decode_payload, normalize_host
+
+
+def _to_number(value: Any) -> float | None:
+    try:
+        return float(str(value).rstrip("%"))
+    except (TypeError, ValueError):
+        return None
 
 
 class IkuaiApiError(Exception):
@@ -41,6 +56,10 @@ class IkuaiApiConnectionError(IkuaiApiError):
 
 class IkuaiApiAuthError(IkuaiApiError):
     """Invalid, missing or expired token (HTTP 401/403)."""
+
+
+class IkuaiApiNotFoundError(IkuaiApiError):
+    """Endpoint missing - the feature is unavailable on this device/license."""
 
 
 class IkuaiApiClient:
@@ -96,6 +115,8 @@ class IkuaiApiClient:
             ) as resp:
                 if resp.status in (401, 403):
                     raise IkuaiApiAuthError(f"Token rejected ({resp.status}) by {url}")
+                if resp.status == 404:
+                    raise IkuaiApiNotFoundError(f"{url} is not available on this device")
                 if resp.status != 200:
                     raise IkuaiApiError(f"HTTP {resp.status} from {url}")
                 raw = await resp.read()
@@ -142,3 +163,58 @@ class IkuaiApiClient:
     async def async_verify(self) -> dict[str, Any]:
         """Validate connectivity + token during config flow."""
         return await self.async_get_system()
+
+    # -- Phase 1: read-only breadth -----------------------------------------
+
+    async def async_get_dhcp_clients(self, limit: int = 500) -> list[dict[str, Any]]:
+        """Active DHCPv4 leases."""
+        results = await self._get(API_DHCP_CLIENTS, params={"limit": limit})
+        return results.get("data") or []
+
+    async def async_get_dhcp_static(self, limit: int = 500) -> list[dict[str, Any]]:
+        """DHCP static bindings (results key differs from the other list APIs)."""
+        results = await self._get(API_DHCP_STATIC, params={"limit": limit})
+        return results.get("static_data") or results.get("data") or []
+
+    async def async_get_auth_users(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Authenticated (PPPoE/PPTP/L2TP...) users."""
+        results = await self._get(API_AUTH_USERS, params={"limit": limit})
+        return results.get("data") or []
+
+    async def async_get_upgrade_info(self) -> dict[str, Any]:
+        """Installed firmware version and the version offered by the cloud."""
+        results = await self._get(API_UPGRADE)
+        data = results.get("data")
+        return data if isinstance(data, dict) else results
+
+    async def async_get_wireless_statistics(self) -> dict[str, Any]:
+        """AP and wireless client counters (zeros when no AP is managed)."""
+        return await self._get(API_WIRELESS_STATISTICS)
+
+    async def async_get_traffic_audit_terminals(
+        self, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """Per-terminal traffic totals (404 when auditing is not enabled)."""
+        results = await self._get(API_TRAFFIC_AUDIT_TERMINALS, params={"limit": limit})
+        data = results.get("daytime") or results.get("data") or []
+        return data if isinstance(data, list) else []
+
+    async def async_get_cpu_history(self) -> float | None:
+        """Average CPU load over the last hour (percent)."""
+        results = await self._get(API_CPU_HISTORY, params={"datetype": "hour", "math": "avg"})
+        series = results.get("cpu") or []
+        values = [_to_number(item.get("cpu")) for item in series if isinstance(item, dict)]
+        values = [v for v in values if v is not None]
+        return round(sum(values) / len(values), 1) if values else None
+
+    async def async_get_memory_history(self) -> float | None:
+        """Average memory usage over the last hour (percent)."""
+        results = await self._get(
+            API_MEMORY_HISTORY, params={"datetype": "hour", "math": "avg"}
+        )
+        series = results.get("memory") or []
+        values = [
+            _to_number(item.get("memory_use")) for item in series if isinstance(item, dict)
+        ]
+        values = [v for v in values if v is not None]
+        return round(sum(values) / len(values), 1) if values else None
