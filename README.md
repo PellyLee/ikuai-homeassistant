@@ -75,6 +75,24 @@ python tools/dump_api.py --raw    # 原始 JSON
 IKUAI_HOST=10.10.10.1 IKUAI_TOKEN=xxxx python tools/dump_api.py
 ```
 
+装集成前，还可以对路由器做一次**资源组全量自查**（只发 GET，绝不写配置）：
+
+```bash
+IKUAI_HOST=10.10.10.1 IKUAI_TOKEN=xxxx python tools/live_check_free.py
+```
+
+它会逐个探测全部 40 个 CRUD 资源组（哪组正常、哪组 404、哪组权限受限），验证免费版/企业版识别，并确认企业版独占组（如 IKEv2 客户端）在免费版被正确隐藏。
+
+装完集成后，再从任意能连通 HA 的机器上**自查 HA 端**：
+
+```bash
+export HA_URL="http://<你的HA地址>:80"
+export HA_TOKEN="eyJ...（Long-Lived Access Token）"
+python tools/verify_ha.py
+```
+
+它会依次检查：令牌有效性 → `ikuai` 是否已加载（components）→ `ikuai.*` 实体清单 → 错误日志里的 ikuai 相关行。两个脚本均为纯标准库实现，令牌只从环境变量读取、不落盘。
+
 ## 排错
 
 | 现象 | 原因与处理 |
