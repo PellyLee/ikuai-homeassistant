@@ -406,6 +406,93 @@
       },
       "channel_clients": {
         "name": "信道终端统计"
+      },
+      "connections_monitor": {
+        "name": "连接数监控"
+      },
+      "disk_usage_monitor": {
+        "name": "磁盘使用率"
+      },
+      "network_load": {
+        "name": "网络负载监控"
+      },
+      "clients_offline": {
+        "name": "IPv4 离线终端数"
+      },
+      "clients_ip6_online": {
+        "name": "IPv6 在线终端数"
+      },
+      "clients_ip6_offline": {
+        "name": "IPv6 离线终端数"
+      },
+      "app_protocols": {
+        "name": "应用协议速率"
+      },
+      "app_traffic_summary": {
+        "name": "24h 应用流量"
+      },
+      "protocols": {
+        "name": "协议分类流量"
+      },
+      "wireless_traffic": {
+        "name": "无线流量统计"
+      },
+      "flow_shunting": {
+        "name": "分流统计"
+      },
+      "policy_traffic": {
+        "name": "策略监控"
+      },
+      "aps_channel_noise": {
+        "name": "AP 信道底噪"
+      },
+      "cameras": {
+        "name": "摄像头数量"
+      },
+      "cloud_switches": {
+        "name": "云管交换机数量"
+      },
+      "downstream": {
+        "name": "周边设备数量"
+      },
+      "dns_stats": {
+        "name": "DNS 缓存状态"
+      },
+      "cpu_freq": {
+        "name": "CPU 实时频率"
+      },
+      "system_disks": {
+        "name": "系统磁盘"
+      },
+      "interfaces_traffic": {
+        "name": "线路 24h 流量"
+      },
+      "interfaces_config": {
+        "name": "接口配置"
+      },
+      "interfaces_physical": {
+        "name": "物理网卡"
+      },
+      "terminal_names": {
+        "name": "终端备注数"
+      },
+      "auth_accounts": {
+        "name": "认证账号数"
+      },
+      "auth_packages": {
+        "name": "认证套餐数"
+      },
+      "dhcp6_clients": {
+        "name": "DHCPv6 客户端数"
+      },
+      "ac_status": {
+        "name": "AC 服务状态"
+      },
+      "ap_list": {
+        "name": "AP 列表"
+      },
+      "wireguard_peers": {
+        "name": "WireGuard 隧道数"
       }
     },
     "binary_sensor": {
