@@ -356,7 +356,7 @@
       "fields": {
         "key": {
           "name": "Config key",
-          "description": "e.g. dns_config / pppoe_server / remote_access"
+          "description": "Pick which singleton config to modify (one of 22). The actual values go in the Fields box below."
         },
         "fields": {
           "name": "Fields",

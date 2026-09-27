@@ -156,11 +156,56 @@ set_config:
   fields:
     key:
       name: 配置项
-      description: 配置键，如 dns_config / pppoe_server / remote_access
+      description: 选择要修改的单例配置（22 项之一）；真正要改的字段写在下方「修改字段」里。
       required: true
-      example: "dns_config"
       selector:
-        text:
+        select:
+          mode: dropdown
+          options:
+            - value: system_basic
+              label: 系统基础设置
+            - value: dns_config
+              label: DNS 代理配置
+            - value: dhcp_access_mode
+              label: DHCP 访问控制模式
+            - value: dhcp6_access_mode
+              label: DHCPv6 访问控制模式
+            - value: pppoe_server
+              label: PPPoE 服务端
+            - value: pptp_server
+              label: PPTP 服务端
+            - value: l2tp_server
+              label: L2TP 服务端
+            - value: ikev2_server
+              label: IKEv2/IPSec 服务端
+            - value: openvpn_server
+              label: OpenVPN 服务端
+            - value: web_auth
+              label: WEB 认证服务
+            - value: alg
+              label: ALG 配置
+            - value: snmp
+              label: SNMP 服务
+            - value: samba
+              label: Samba 服务
+            - value: ftp
+              label: FTP 服务
+            - value: security_advanced
+              label: 安全中心高级设置
+            - value: mac_mode
+              label: MAC 黑白名单模式
+            - value: remote_access
+              label: 远程访问
+            - value: secondary_route
+              label: 网络分享控制
+            - value: kernel_params
+              label: 内核参数
+            - value: cpufreq_mode
+              label: CPU 工作模式
+            - value: backup_auto
+              label: 自动备份策略
+            - value: vrrp
+              label: VRRP 热备
     fields:
       name: 修改字段
       description: 只写要改的字段，其余字段保持路由器当前值（整个配置会回填）

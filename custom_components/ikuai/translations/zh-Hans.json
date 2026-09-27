@@ -355,7 +355,7 @@
       "fields": {
         "key": {
           "name": "配置项",
-          "description": "配置键，如 dns_config / pppoe_server / remote_access"
+          "description": "选择要修改的单例配置（22 项之一）；真正要改的字段写在下方「修改字段」里。"
         },
         "fields": {
           "name": "修改字段",

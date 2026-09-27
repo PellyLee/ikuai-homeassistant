@@ -469,7 +469,12 @@ async def _async_query(call: ServiceCall) -> dict[str, Any]:
 async def _async_set_config(call: ServiceCall) -> dict[str, Any]:
     """Read-modify-write one singleton configuration resource."""
     runtime = _pick(call, call.hass)
-    cfg = CONFIG_BY_KEY[call.data[ATTR_KEY]]
+    key = call.data[ATTR_KEY]
+    cfg = CONFIG_BY_KEY.get(key)
+    if cfg is None:
+        raise HomeAssistantError(
+            f"未知配置项「{key}」。可选配置项：{', '.join(sorted(CONFIG_BY_KEY))}"
+        )
     fields = dict(call.data.get(ATTR_FIELDS) or {})
     if cfg.dangerous and not call.data.get(ATTR_CONFIRM):
         raise HomeAssistantError(
